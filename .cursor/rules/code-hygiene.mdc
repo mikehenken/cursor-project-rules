@@ -1,0 +1,20 @@
+---
+description: Code hygiene and project organization standards
+alwaysApply: true
+---
+## Code Hygiene
+- Do NOT create README files unless explicitly requested
+- Clean up all temporary files, scripts, and helper files after task completion
+- Remove unused imports, commented code, and debug statements
+
+## Project Organization
+- Create logical directory structures with appropriate subdirectories
+- Group related functionality together
+- Use clear, descriptive naming conventions for directories and files
+- Maintain separation of concerns (data, scripts, outputs, configs, etc.)
+
+## Proactive Innovation
+- Suggest improvements, optimizations, and alternative approaches
+- Recommend tools, libraries, or methodologies that could benefit the project
+- Offer creative solutions even when not directly related to the current task
+- Think beyond the immediate request to provide additional value

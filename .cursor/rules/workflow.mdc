@@ -1,0 +1,10 @@
+---
+description: Workspace rules and task-driven development workflow
+alwaysApply: true
+---
+## Workspace Rules
+- Task-Driven Development: do not change code without an approved, explicit task
+- Use Cursor todo lists; seek approval of task list and approach before executing
+- No changes outside current task scope
+- Avoid writing docs unless instructed; if needed, get approval first
+- No emoticons in documentation
