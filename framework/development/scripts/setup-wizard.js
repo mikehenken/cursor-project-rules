@@ -68,6 +68,12 @@ async function main() {
 
     // Always download and install rules
     await downloadAndInstallRules();
+    
+    // Ensure MCP dependencies are installed in root (if Next.js wasn't set up)
+    // This ensures mcp-server.js works even without Next.js
+    if (!config.nextjs) {
+      await ensureMCPDependencies();
+    }
 
     // Handle granular rules if requested
     if (config.granularRules) {
@@ -303,14 +309,71 @@ async function setupNextJS() {
         }
       });
       
-      // Note: package.json is kept from Next.js setup, we don't restore the original
-      // as Next.js creates its own with all necessary dependencies
+      // Note: package.json is kept from Next.js setup, but we need to ensure
+      // MCP dependencies are added to root package.json (handled above)
       
       // Clean up temp directory
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
 
     console.log('✅ Next.js setup complete in frontend/!');
+    
+    // Ensure root package.json has MCP dependencies (Next.js creates its own in frontend/)
+    // Root package.json needs @modelcontextprotocol/sdk for mcp-server.js
+    const rootPackageJsonPath = join(process.cwd(), 'package.json');
+    if (fs.existsSync(rootPackageJsonPath)) {
+      try {
+        const rootPackageJson = JSON.parse(fs.readFileSync(rootPackageJsonPath, 'utf8'));
+        if (!rootPackageJson.dependencies || !rootPackageJson.dependencies['@modelcontextprotocol/sdk']) {
+          console.log('📦 Ensuring MCP dependencies are installed in root...');
+          if (!rootPackageJson.dependencies) {
+            rootPackageJson.dependencies = {};
+          }
+          rootPackageJson.dependencies['@modelcontextprotocol/sdk'] = '^1.20.2';
+          if (!rootPackageJson.type) {
+            rootPackageJson.type = 'module';
+          }
+          fs.writeFileSync(rootPackageJsonPath, JSON.stringify(rootPackageJson, null, 2));
+          
+          // Install MCP dependencies
+          execSync('npm install @modelcontextprotocol/sdk@^1.20.2 --silent', { 
+            stdio: 'inherit',
+            cwd: process.cwd()
+          });
+          console.log('  ✅ MCP dependencies installed in root');
+        }
+      } catch (error) {
+        console.log(`  ⚠️  Could not update root package.json: ${error.message}`);
+        // Try to install anyway
+        try {
+          execSync('npm install @modelcontextprotocol/sdk@^1.20.2 --silent', { 
+            stdio: 'inherit',
+            cwd: process.cwd()
+          });
+        } catch (installError) {
+          console.log(`  ⚠️  Could not install MCP dependencies: ${installError.message}`);
+        }
+      }
+    } else {
+      // Create root package.json if it doesn't exist
+      console.log('📦 Creating root package.json with MCP dependencies...');
+      const rootPackageJson = {
+        name: 'rules-framework-project',
+        version: '1.0.0',
+        private: true,
+        description: 'Project with Rules Framework and MCP integration',
+        type: 'module',
+        dependencies: {
+          '@modelcontextprotocol/sdk': '^1.20.2'
+        }
+      };
+      fs.writeFileSync(rootPackageJsonPath, JSON.stringify(rootPackageJson, null, 2));
+      execSync('npm install --silent', { 
+        stdio: 'inherit',
+        cwd: process.cwd()
+      });
+      console.log('  ✅ Root package.json created and dependencies installed');
+    }
     
     // Add Cloudflare Workers dependencies if deploying to Cloudflare
     if (config.cloudflare && config.cloudflareTarget === 'Cloudflare Workers') {
@@ -569,6 +632,67 @@ DEPLOYMENT_TYPE=${config.cloudflareTarget.toLowerCase().replace('cloudflare ', '
 }
 
 /**
+ * Ensure MCP dependencies are installed in root package.json
+ */
+async function ensureMCPDependencies() {
+  const rootPackageJsonPath = join(process.cwd(), 'package.json');
+  
+  if (fs.existsSync(rootPackageJsonPath)) {
+    try {
+      const rootPackageJson = JSON.parse(fs.readFileSync(rootPackageJsonPath, 'utf8'));
+      if (!rootPackageJson.dependencies || !rootPackageJson.dependencies['@modelcontextprotocol/sdk']) {
+        console.log('📦 Ensuring MCP dependencies are installed...');
+        if (!rootPackageJson.dependencies) {
+          rootPackageJson.dependencies = {};
+        }
+        rootPackageJson.dependencies['@modelcontextprotocol/sdk'] = '^1.20.2';
+        if (!rootPackageJson.type) {
+          rootPackageJson.type = 'module';
+        }
+        fs.writeFileSync(rootPackageJsonPath, JSON.stringify(rootPackageJson, null, 2));
+        
+        // Install MCP dependencies
+        execSync('npm install @modelcontextprotocol/sdk@^1.20.2 --silent', { 
+          stdio: 'inherit',
+          cwd: process.cwd()
+        });
+        console.log('  ✅ MCP dependencies installed');
+      }
+    } catch (error) {
+      console.log(`  ⚠️  Could not update package.json: ${error.message}`);
+      // Try to install anyway
+      try {
+        execSync('npm install @modelcontextprotocol/sdk@^1.20.2 --silent', { 
+          stdio: 'inherit',
+          cwd: process.cwd()
+        });
+      } catch (installError) {
+        console.log(`  ⚠️  Could not install MCP dependencies: ${installError.message}`);
+      }
+    }
+  } else {
+    // Create package.json if it doesn't exist
+    console.log('📦 Creating package.json with MCP dependencies...');
+    const rootPackageJson = {
+      name: 'rules-framework-project',
+      version: '1.0.0',
+      private: true,
+      description: 'Project with Rules Framework and MCP integration',
+      type: 'module',
+      dependencies: {
+        '@modelcontextprotocol/sdk': '^1.20.2'
+      }
+    };
+    fs.writeFileSync(rootPackageJsonPath, JSON.stringify(rootPackageJson, null, 2));
+    execSync('npm install --silent', { 
+      stdio: 'inherit',
+      cwd: process.cwd()
+    });
+    console.log('  ✅ Package.json created and dependencies installed');
+  }
+}
+
+/**
  * Download and install rules from framework API
  */
 async function downloadAndInstallRules() {
@@ -767,6 +891,11 @@ async function handleGranularRules() {
     for (const rulePurpose of rulesList) {
       const purpose = rulePurpose.name;
       const purposeDir = join(rulesDir, purpose);
+      
+      // Ensure purpose directory exists
+      if (!fs.existsSync(purposeDir)) {
+        fs.mkdirSync(purposeDir, { recursive: true });
+      }
       
       console.log(`\n📁 Purpose: ${purpose} (${rulePurpose.description || 'No description'})`);
       console.log('─'.repeat(60));
