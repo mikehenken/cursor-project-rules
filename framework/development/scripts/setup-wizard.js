@@ -2,48 +2,91 @@
 
 /**
  * Rules Framework Setup Wizard
- * Interactive CLI tool for setting up projects with the Rules Framework
+ * Handles project setup with Next.js, FastAPI, GitHub, and Cloudflare integration
+ * Accepts command-line flags from setup.sh
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import { createInterface } from 'readline';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const projectRoot = join(__dirname, '..');
 
-// Configuration
+// Parse command-line arguments
+const args = process.argv.slice(2);
 const config = {
-  frameworkUrl: 'https://rules-framework.mikehenken.workers.dev',
-  rulesDir: join(projectRoot, '.cursor', 'rules'),
-  templatesDir: join(projectRoot, 'templates')
+  nextjs: args.includes('--nextjs'),
+  fastapi: args.includes('--fastapi'),
+  github: args.includes('--github'),
+  repoName: getArgValue('--repoName'),
+  repoVisibility: getArgValue('--repoVisibility') || 'private',
+  cloudflare: args.includes('--cloudflare'),
+  cloudflareTarget: getArgValue('--cloudflareTarget') || 'Cloudflare Workers',
+  granularRules: args.includes('--granular-rules'),
+  cloudflareApiToken: process.env.CLOUDFLARE_API_TOKEN,
+  cloudflareAccountId: process.env.CLOUDFLARE_ACCOUNT_ID
 };
 
+function getArgValue(flag) {
+  const index = args.indexOf(flag);
+  return index !== -1 && args[index + 1] ? args[index + 1] : null;
+}
+
 /**
- * Main setup wizard
+ * Main setup function
  */
-async function setupWizard() {
-  console.log('🎯 Rules Framework Setup Wizard');
+async function main() {
+  console.log('🚀 Rules Framework Setup Wizard');
   console.log('================================\n');
-  console.log('This wizard will help you set up your project with the Rules Framework.');
-  console.log('You can choose which components to include based on your project needs.\n');
 
   try {
-    // Get project information
-    const projectInfo = await getProjectInfo();
+    // Setup Next.js if requested
+    if (config.nextjs) {
+      await setupNextJS();
+    }
+
+    // Setup FastAPI if requested
+    if (config.fastapi) {
+      await setupFastAPI();
+    }
+
+    // Setup GitHub if requested
+    if (config.github) {
+      await setupGitHub();
+    }
+
+    // Setup Cloudflare if requested
+    if (config.cloudflare) {
+      await setupCloudflare();
+    }
+
+    // Handle granular rules if requested
+    if (config.granularRules) {
+      await handleGranularRules();
+    }
+
+    console.log('\n🎉 Setup Complete!');
+    console.log('==================\n');
     
-    // Get component selections
-    const selections = await getComponentSelections();
-    
-    // Apply selections
-    await applySelections(projectInfo, selections);
-    
-    // Show next steps
-    showNextSteps(projectInfo, selections);
-    
+    console.log('📋 Configuration Summary:');
+    if (config.nextjs) console.log('  ✅ Next.js Frontend');
+    if (config.fastapi) console.log('  ✅ FastAPI Backend');
+    if (config.github) {
+      console.log(`  ✅ GitHub Integration`);
+      console.log(`     - Repository: ${config.repoName}`);
+      console.log(`     - Visibility: ${config.repoVisibility}`);
+    }
+    if (config.cloudflare) {
+      console.log(`  ✅ Cloudflare Deployment`);
+      console.log(`     - Target: ${config.cloudflareTarget}`);
+    }
+    if (config.granularRules) {
+      console.log('  ✅ Granular Rules Configuration');
+    }
+
   } catch (error) {
     console.error('❌ Setup failed:', error.message);
     process.exit(1);
@@ -51,360 +94,310 @@ async function setupWizard() {
 }
 
 /**
- * Get project information
+ * Setup Next.js
  */
-async function getProjectInfo() {
-  console.log('📋 Project Information');
-  console.log('=====================\n');
+async function setupNextJS() {
+  console.log('🚀 Running Next.js setup...');
   
-  const projectPath = process.cwd();
-  const projectName = projectPath.split('/').pop();
-  
-  console.log(`Project Path: ${projectPath}`);
-  console.log(`Project Name: ${projectName}\n`);
-  
-  return {
-    path: projectPath,
-    name: projectName
-  };
-}
+  const files = fs.readdirSync('.');
+  const hasNextJS = files.some(file => 
+    ['next.config.ts', 'next.config.js', 'next-env.d.ts'].includes(file) ||
+    fs.existsSync('src/app') || fs.existsSync('pages')
+  );
 
-/**
- * Get component selections
- */
-async function getComponentSelections() {
-  console.log('🔧 Component Selection');
-  console.log('======================\n');
-  console.log('Select which components you want to include in your project:\n');
-  
-  const selections = {
-    rules: [],
-    templates: [],
-    mcp: false,
-    cloudflare: false,
-    github: false
-  };
-  
-  // Rules selection
-  console.log('📋 Cursor Rules:');
-  const ruleOptions = [
-    { key: 'core', name: 'Core Rules', description: 'Essential project-wide rules (workflow, engineering practices, code hygiene)' },
-    { key: 'backend', name: 'Backend Rules', description: 'API development and FastAPI guidelines' },
-    { key: 'docs', name: 'Documentation Rules', description: 'Documentation standards and organization' },
-    { key: 'testing', name: 'Testing Rules', description: 'Testing requirements and protocols' },
-    { key: 'ci-cd', name: 'CI/CD Rules', description: 'GitHub workflow and deployment conventions' }
-  ];
-  
-  for (const rule of ruleOptions) {
-    const include = await askYesNo(`  Include ${rule.name}? (${rule.description})`);
-    if (include) {
-      selections.rules.push(rule.key);
-    }
-  }
-  
-  console.log('\n📦 Templates:');
-  const templateOptions = [
-    { key: 'nextjs-cloudflare', name: 'Next.js + Cloudflare', description: 'Complete Next.js deployment setup for Cloudflare Pages' },
-    { key: 'deployment', name: 'Deployment Files', description: 'Universal deployment scripts and configuration' }
-  ];
-  
-  for (const template of templateOptions) {
-    const include = await askYesNo(`  Include ${template.name}? (${template.description})`);
-    if (include) {
-      selections.templates.push(template.key);
-    }
-  }
-  
-  console.log('\n🔌 Integrations:');
-  selections.mcp = await askYesNo('  Enable MCP integration? (Allows Cursor to use Rules Framework tools)');
-  selections.cloudflare = await askYesNo('  Configure Cloudflare deployment? (Sets up environment variables)');
-  selections.github = await askYesNo('  Include GitHub repository setup? (Adds .github templates and workflows)');
-  
-  return selections;
-}
-
-/**
- * Apply selections to project
- */
-async function applySelections(projectInfo, selections) {
-  console.log('\n🚀 Applying Configuration');
-  console.log('=========================\n');
-  
-  // Create .cursor/rules directory structure
-  if (selections.rules.length > 0) {
-    console.log('📋 Setting up Cursor rules...');
-    await setupRules(projectInfo, selections.rules);
-  }
-  
-  // Apply templates
-  if (selections.templates.length > 0) {
-    console.log('📦 Applying templates...');
-    await applyTemplates(projectInfo, selections.templates);
-  }
-  
-  // Setup MCP integration
-  if (selections.mcp) {
-    console.log('🔌 Setting up MCP integration...');
-    await setupMCP(projectInfo);
-  }
-  
-  // Configure Cloudflare
-  if (selections.cloudflare) {
-    console.log('☁️  Configuring Cloudflare...');
-    await setupCloudflare(projectInfo);
-  }
-  
-  // Setup GitHub
-  if (selections.github) {
-    console.log('🐙 Setting up GitHub...');
-    await setupGitHub(projectInfo);
-  }
-}
-
-/**
- * Setup Cursor rules
- */
-async function setupRules(projectInfo, ruleTypes) {
-  const rulesDir = join(projectInfo.path, '.cursor', 'rules');
-  mkdirSync(rulesDir, { recursive: true });
-  
-  for (const ruleType of ruleTypes) {
-    const sourceDir = join(config.rulesDir, ruleType);
-    const targetDir = join(rulesDir, ruleType);
+  if (hasNextJS) {
+    console.log('✅ Next.js already configured');
     
-    if (existsSync(sourceDir)) {
-      execSync(`cp -r "${sourceDir}" "${targetDir}"`, { stdio: 'pipe' });
-      console.log(`  ✅ Added ${ruleType} rules`);
-    } else {
-      console.log(`  ⚠️  ${ruleType} rules not found`);
-    }
-  }
-}
-
-/**
- * Apply templates
- */
-async function applyTemplates(projectInfo, templateTypes) {
-  for (const templateType of templateTypes) {
-    if (templateType === 'nextjs-cloudflare') {
-      await applyNextJSCloudflareTemplate(projectInfo);
-    } else if (templateType === 'deployment') {
-      await applyDeploymentTemplate(projectInfo);
-    }
-  }
-}
-
-/**
- * Apply Next.js Cloudflare template
- */
-async function applyNextJSCloudflareTemplate(projectInfo) {
-  const templateDir = join(config.templatesDir, 'nextjs-cloudflare');
-  const files = [
-    'deploy-template.js',
-    'next.config.template.js',
-    'wrangler.template.toml',
-    'package.template.json',
-    'env.example'
-  ];
-  
-  for (const file of files) {
-    const sourcePath = join(templateDir, file);
-    if (existsSync(sourcePath)) {
-      let targetName = file;
-      if (file.includes('.template.')) {
-        targetName = file.replace('.template.', '.');
-      }
-      const targetPath = join(projectInfo.path, targetName);
-      execSync(`cp "${sourcePath}" "${targetPath}"`, { stdio: 'pipe' });
-      console.log(`  ✅ Added ${targetName}`);
-    }
-  }
-}
-
-/**
- * Apply deployment template
- */
-async function applyDeploymentTemplate(projectInfo) {
-  const files = [
-    'deploy-template.js',
-    'wrangler.template.toml',
-    'env.example'
-  ];
-  
-  for (const file of files) {
-    const sourcePath = join(projectRoot, file);
-    if (existsSync(sourcePath)) {
-      let targetName = file;
-      if (file.includes('.template.')) {
-        targetName = file.replace('.template.', '.');
-      }
-      const targetPath = join(projectInfo.path, targetName);
-      execSync(`cp "${sourcePath}" "${targetPath}"`, { stdio: 'pipe' });
-      console.log(`  ✅ Added ${targetName}`);
-    }
-  }
-}
-
-/**
- * Setup MCP integration
- */
-async function setupMCP(projectInfo) {
-  const mcpConfig = {
-    mcpServers: {
-      "rules-framework": {
-        command: "node",
-        args: [join(projectRoot, "mcp-server.js")],
-        env: {
-          RULES_FRAMEWORK_URL: config.frameworkUrl
+    // Update page.tsx to show Hello World if it exists
+    const pagePaths = [
+      'src/app/page.tsx',
+      'src/app/page.js',
+      'pages/index.tsx',
+      'pages/index.js'
+    ];
+    
+    for (const pagePath of pagePaths) {
+      if (fs.existsSync(pagePath)) {
+        const content = fs.readFileSync(pagePath, 'utf8');
+        if (!content.includes('Hello World')) {
+          // Simple Hello World page
+          const helloWorldPage = `export default function Home() {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+      <h1>Hello World</h1>
+    </div>
+  );
+}`;
+          fs.writeFileSync(pagePath, helloWorldPage);
+          console.log(`  ✅ Updated ${pagePath} with Hello World`);
         }
       }
     }
-  };
+    return;
+  }
+
+  // Check for conflicting files
+  const conflictingFiles = files.filter(file => 
+    !['.cursor', 'mcp-server.js', 'setup-wizard.js', 'package.json', 'package-lock.json', 'node_modules', '.git'].includes(file) &&
+    !file.startsWith('.')
+  );
+
+  let tempDir = null;
+  if (conflictingFiles.length > 0) {
+    console.log('⚠️  Directory has files, temporarily moving framework files...');
+    tempDir = `.framework-temp-${Date.now()}`;
+    fs.mkdirSync(tempDir);
+    
+    const frameworkFiles = ['.cursor', 'mcp-server.js', 'setup-wizard.js'];
+    frameworkFiles.forEach(file => {
+      if (fs.existsSync(file)) {
+        if (file === '.cursor') {
+          fs.cpSync(file, `${tempDir}/.cursor`, { recursive: true });
+          fs.rmSync(file, { recursive: true, force: true });
+        } else {
+          fs.renameSync(file, `${tempDir}/${file}`);
+        }
+      }
+    });
+  }
+
+  try {
+    console.log('📦 Installing Next.js with TypeScript and Tailwind...');
+    execSync('npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias "@/*" --yes', { 
+      stdio: 'inherit',
+      cwd: process.cwd()
+    });
+
+    // Update page.tsx with Hello World
+    const pagePath = 'src/app/page.tsx';
+    if (fs.existsSync(pagePath)) {
+      const helloWorldPage = `export default function Home() {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
+      <h1>Hello World</h1>
+    </div>
+  );
+}`;
+      fs.writeFileSync(pagePath, helloWorldPage);
+    }
+
+    // Restore framework files
+    if (tempDir && fs.existsSync(tempDir)) {
+      console.log('🔄 Restoring framework files...');
+      const frameworkFiles = ['.cursor', 'mcp-server.js'];
+      frameworkFiles.forEach(file => {
+        if (fs.existsSync(`${tempDir}/${file}`)) {
+          if (file === '.cursor') {
+            fs.cpSync(`${tempDir}/${file}`, '.cursor', { recursive: true });
+          } else {
+            fs.renameSync(`${tempDir}/${file}`, file);
+          }
+        }
+      });
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+
+    console.log('✅ Next.js setup complete!');
+    
+    // Add Cloudflare Workers dependencies if deploying to Cloudflare
+    if (config.cloudflare && config.cloudflareTarget === 'Cloudflare Workers') {
+      console.log('🔧 Adding Cloudflare Workers configuration...');
+      try {
+        execSync('npm install @cloudflare/next-on-pages @cloudflare/workers-types wrangler --legacy-peer-deps', { 
+          stdio: 'inherit' 
+        });
+      } catch (error) {
+        console.log('⚠️  Cloudflare dependencies installation failed, continuing...');
+      }
+    }
+  } catch (error) {
+    // Restore framework files on error
+    if (tempDir && fs.existsSync(tempDir)) {
+      const frameworkFiles = ['.cursor', 'mcp-server.js'];
+      frameworkFiles.forEach(file => {
+        if (fs.existsSync(`${tempDir}/${file}`)) {
+          if (file === '.cursor') {
+            fs.cpSync(`${tempDir}/${file}`, '.cursor', { recursive: true });
+          } else {
+            fs.renameSync(`${tempDir}/${file}`, file);
+          }
+        }
+      });
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+    throw error;
+  }
+}
+
+/**
+ * Setup FastAPI backend
+ */
+async function setupFastAPI() {
+  console.log('🐍 Running FastAPI setup...');
   
-  const mcpPath = join(projectInfo.path, '.cursor', 'mcp.json');
-  writeFileSync(mcpPath, JSON.stringify(mcpConfig, null, 2));
-  console.log(`  ✅ Created .cursor/mcp.json`);
+  const backendDir = 'backend';
+  if (fs.existsSync(backendDir)) {
+    console.log('✅ FastAPI backend directory already exists');
+    
+    // Check if main.py exists and update it
+    const mainPyPath = join(backendDir, 'main.py');
+    if (!fs.existsSync(mainPyPath)) {
+      await createFastAPIFiles(backendDir);
+    }
+    return;
+  }
+
+  fs.mkdirSync(backendDir);
+  await createFastAPIFiles(backendDir);
+  console.log('✅ FastAPI backend setup complete!');
+}
+
+async function createFastAPIFiles(backendDir) {
+  // Create main.py
+  const mainPy = `from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/")
+async def root():
+    return {"message": "Hello World"}
+
+@app.get("/api/hello")
+async def hello():
+    return {"message": "Hello World from FastAPI"}
+`;
+  fs.writeFileSync(join(backendDir, 'main.py'), mainPy);
+
+  // Create requirements.txt
+  const requirementsTxt = `fastapi==0.104.1
+uvicorn==0.24.0
+`;
+  fs.writeFileSync(join(backendDir, 'requirements.txt'), requirementsTxt);
+
+  // Create .gitignore for backend
+  const gitignore = `__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv
+`;
+  fs.writeFileSync(join(backendDir, '.gitignore'), gitignore);
+
+  console.log(`  ✅ Created ${backendDir}/main.py`);
+  console.log(`  ✅ Created ${backendDir}/requirements.txt`);
+}
+
+/**
+ * Setup GitHub repository
+ */
+async function setupGitHub() {
+  console.log('🐙 Setting up GitHub repository...');
   
-  // Copy MCP server if not exists
-  const mcpServerPath = join(projectInfo.path, 'mcp-server.js');
-  if (!existsSync(mcpServerPath)) {
-    execSync(`cp "${join(projectRoot, 'mcp-server.js')}" "${mcpServerPath}"`, { stdio: 'pipe' });
-    console.log(`  ✅ Added mcp-server.js`);
+  if (!config.repoName) {
+    console.log('⚠️  No repository name provided, skipping GitHub setup');
+    return;
+  }
+
+  // Check if git is initialized
+  if (!fs.existsSync('.git')) {
+    try {
+      execSync('git init', { stdio: 'inherit' });
+      console.log('  ✅ Initialized git repository');
+    } catch (error) {
+      console.log('  ⚠️  Git init failed, continuing...');
+    }
+  }
+
+  // Check if remote already exists
+  try {
+    const remotes = execSync('git remote -v', { encoding: 'utf8' });
+    if (remotes.includes('origin')) {
+      console.log('  ✅ Git remote already configured');
+      return;
+    }
+  } catch (error) {
+    // No remotes, continue
+  }
+
+  // Create GitHub repo using gh CLI if available
+  try {
+    const visibilityFlag = config.repoVisibility === 'private' ? '--private' : '--public';
+    execSync(`gh repo create ${config.repoName} ${visibilityFlag} --source=. --remote=origin --push`, {
+      stdio: 'inherit'
+    });
+    console.log(`  ✅ Created GitHub repository: ${config.repoName}`);
+    console.log(`  ✅ Pushed code to GitHub`);
+  } catch (error) {
+    console.log('  ⚠️  GitHub CLI not available or repo creation failed');
+    console.log('  💡 You can manually create the repo and push:');
+    console.log(`     gh repo create ${config.repoName} ${config.repoVisibility === 'private' ? '--private' : '--public'}`);
+    console.log(`     git remote add origin git@github.com:$(git config user.name)/${config.repoName}.git`);
+    console.log(`     git push -u origin main`);
   }
 }
 
 /**
  * Setup Cloudflare configuration
  */
-async function setupCloudflare(projectInfo) {
-  const envPath = join(projectInfo.path, '.env');
+async function setupCloudflare() {
+  console.log('☁️  Setting up Cloudflare configuration...');
+  
+  // Create wrangler.toml
+  const accountId = config.cloudflareAccountId || 'your_account_id_here';
+  const wranglerConfig = `name = "${config.repoName || 'project'}"
+compatibility_date = "2024-01-01"
+account_id = "${accountId}"
+
+[env.production]
+name = "${config.repoName || 'project'}"
+`;
+  
+  fs.writeFileSync('wrangler.toml', wranglerConfig);
+  console.log('  ✅ Created wrangler.toml');
+
+  // Create .env file with Cloudflare credentials
   const envContent = `# Cloudflare Configuration
-CLOUDFLARE_API_TOKEN=your_cloudflare_api_token_here
-CLOUDFLARE_ACCOUNT_ID=your_cloudflare_account_id_here
-PROJECT_NAME=${projectInfo.name}
-DEPLOYMENT_ENV=production
-
-# Get your credentials from:
-# https://dash.cloudflare.com/profile/api-tokens
+CLOUDFLARE_API_TOKEN=${config.cloudflareApiToken || 'your_cloudflare_api_token_here'}
+CLOUDFLARE_ACCOUNT_ID=${accountId}
+FRAMEWORK_VERSION=1.0.0
+DEPLOYMENT_TYPE=${config.cloudflareTarget.toLowerCase().replace('cloudflare ', '')}
 `;
+  
+  fs.writeFileSync('.env', envContent);
+  console.log('  ✅ Created .env file');
 
-  writeFileSync(envPath, envContent);
-  console.log(`  ✅ Created .env file`);
+  // Add .env to .gitignore if not already there
+  if (fs.existsSync('.gitignore')) {
+    const gitignore = fs.readFileSync('.gitignore', 'utf8');
+    if (!gitignore.includes('.env')) {
+      fs.appendFileSync('.gitignore', '\n.env\n');
+    }
+  } else {
+    fs.writeFileSync('.gitignore', '.env\n');
+  }
+
+  console.log('  ✅ Cloudflare configuration complete!');
 }
 
 /**
- * Setup GitHub integration
+ * Handle granular rules configuration
  */
-async function setupGitHub(projectInfo) {
-  const githubDir = join(projectInfo.path, '.github');
-  mkdirSync(githubDir, { recursive: true });
+async function handleGranularRules() {
+  console.log('📋 Configuring granular rules...');
+  console.log('  This feature will be implemented in a future update.');
+  console.log('  For now, all rules will be enabled with default settings.');
   
-  // Create PR template
-  const prTemplate = `# Pull Request
-
-## Description
-Brief description of changes
-
-## Type of Change
-- [ ] Bug fix
-- [ ] New feature
-- [ ] Breaking change
-- [ ] Documentation update
-
-## Testing
-- [ ] Tests pass locally
-- [ ] New tests added for new functionality
-- [ ] All existing tests still pass
-
-## Checklist
-- [ ] Code follows project style guidelines
-- [ ] Self-review completed
-- [ ] Documentation updated
-- [ ] No breaking changes (or clearly documented)
-`;
-
-  writeFileSync(join(githubDir, 'pull_request_template.md'), prTemplate);
-  console.log(`  ✅ Created GitHub PR template`);
+  // TODO: Implement granular rules selection
+  // This would involve:
+  // 1. Fetching available rules from framework API
+  // 2. Iterating through each rule
+  // 3. Presenting options: Include, Modify, Exclude, Exclude All
+  // 4. Handling modifications to rule properties
 }
 
-/**
- * Show next steps
- */
-function showNextSteps(projectInfo, selections) {
-  console.log('\n🎉 Setup Complete!');
-  console.log('==================\n');
-  
-  console.log('📋 What was configured:');
-  if (selections.rules.length > 0) {
-    console.log(`  ✅ Cursor rules: ${selections.rules.join(', ')}`);
-  }
-  if (selections.templates.length > 0) {
-    console.log(`  ✅ Templates: ${selections.templates.join(', ')}`);
-  }
-  if (selections.mcp) {
-    console.log('  ✅ MCP integration');
-  }
-  if (selections.cloudflare) {
-    console.log('  ✅ Cloudflare configuration');
-  }
-  if (selections.github) {
-    console.log('  ✅ GitHub integration');
-  }
-  
-  console.log('\n🚀 Next Steps:');
-  console.log('==============');
-  
-  if (selections.cloudflare) {
-    console.log('1. Configure Cloudflare credentials in .env file');
-    console.log('2. Get your API token from: https://dash.cloudflare.com/profile/api-tokens');
-  }
-  
-  if (selections.mcp) {
-    console.log('3. Restart Cursor to enable MCP integration');
-    console.log('4. Use @rules-framework commands in Cursor');
-  }
-  
-  if (selections.templates.includes('nextjs-cloudflare')) {
-    console.log('5. Install dependencies: npm install');
-    console.log('6. Deploy: npm run deploy');
-  }
-  
-  console.log('\n📚 Available Commands:');
-  console.log('======================');
-  console.log('In Cursor:');
-  console.log('  @rules-framework list_rules - Browse available rules');
-  console.log('  @rules-framework enable_rules - Enable specific rule sets');
-  console.log('  @rules-framework apply_template - Apply templates');
-  console.log('  @rules-framework deploy_project - Deploy your project');
-  
-  console.log('\nCLI:');
-  console.log('  node scripts/setup-wizard.js - Run this wizard again');
-  console.log('  npm run pull:deployment - Pull deployment files from framework');
-  console.log('  npm run pull:rules - Pull rules from framework');
-  
-  console.log('\n🌐 Framework URL:');
-  console.log('================');
-  console.log(`https://rules-framework.mikehenken.workers.dev`);
-}
+// Run main function
+main().catch(console.error);
 
-/**
- * Ask yes/no question
- */
-function askYesNo(question) {
-  return new Promise((resolve) => {
-    const rl = createInterface({
-      input: process.stdin,
-      output: process.stdout
-    });
-    
-    rl.question(`${question} (y/n): `, (answer) => {
-      rl.close();
-      resolve(answer.toLowerCase().startsWith('y'));
-    });
-  });
-}
-
-// Run the wizard
-if (import.meta.url === `file://${process.argv[1]}`) {
-  setupWizard().catch(console.error);
-}

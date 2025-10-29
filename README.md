@@ -14,7 +14,18 @@ Files that are **pulled into external Cursor projects** via setup/MCP.
 
 ## 🚀 Quick Start for External Projects
 
-### One-Line Setup
+### Interactive Setup (Recommended)
+```bash
+curl -s https://rules-framework.mikehenken.workers.dev/files/setup.sh | bash
+```
+
+This interactive wizard will guide you through:
+- Choosing core modules (Next.js, FastAPI)
+- Configuring GitHub repo creation
+- Setting up Cloudflare deployment
+- Customizing individual rules (optional)
+
+### Quick Setup (Non-Interactive)
 ```bash
 curl -s https://rules-framework.mikehenken.workers.dev/install | bash
 ```
@@ -24,6 +35,33 @@ curl -s https://rules-framework.mikehenken.workers.dev/install | bash
 - **Purpose-Scoped Rules**: Core, backend, docs, testing, CI/CD rules
 - **Templates**: Next.js + Cloudflare, FastAPI, documentation
 - **CLI Tools**: `rules setup`, `rules pull`, `rules deploy`
+
+## 📋 Interactive Setup Options
+
+When you run the interactive setup, you'll be asked:
+
+### Core Configuration
+- **Next.js Frontend** (default: Yes)
+- **FastAPI Backend** (default: Yes)
+- **Auto GitHub Repo Creation** (default: Yes)
+- **Cloudflare Deployment** (default: Yes)
+- **Granular Rule Configuration** (default: No)
+
+### GitHub Configuration (if enabled)
+- **Project Name**: Defaults to current directory name
+- **Repository Visibility**: `private` (default) or `public`
+
+### Cloudflare Configuration (if enabled)
+- **API Token**: Your Cloudflare API token
+- **Account ID**: Your Cloudflare account ID
+- **Deployment Target**: `Cloudflare Workers` (default) or `Cloudflare Pages`
+
+### Granular Rules (if enabled)
+For each available rule, you can:
+- **(I)nclude**: Keep with default settings
+- **(M)odify**: Customize name, description, scope, categories
+- **(E)xclude**: Disable for this project
+- **Exclude (A)ll**: Disable globally and save preference
 
 ## 📁 Project Structure
 
@@ -75,17 +113,94 @@ npm run dev
 
 ### Usage Commands
 ```bash
-# One-line setup
-curl -s https://rules-framework.mikehenken.workers.dev/install | bash
+# Interactive setup (remote)
+curl -s https://rules-framework.mikehenken.workers.dev/files/setup.sh | bash
 
-# Interactive setup
-rules setup
+# Interactive setup (local)
+./setup.sh
+
+# Non-interactive setup
+curl -s https://rules-framework.mikehenken.workers.dev/install | bash
 
 # Pull specific components
 rules pull
 
 # Deploy to Cloudflare
 rules deploy
+```
+
+### Running the Interactive Setup
+
+**From Remote:**
+```bash
+curl -s https://rules-framework.mikehenken.workers.dev/files/setup.sh | bash
+```
+
+**From Local Repository:**
+```bash
+# Make executable (if needed)
+chmod +x setup.sh
+
+# Run interactive wizard
+./setup.sh
+```
+
+The wizard will:
+1. Ask configuration questions with smart defaults
+2. Download framework files
+3. Install dependencies
+4. Launch `setup-wizard.js` with your preferences
+5. Display a configuration summary
+
+### Example Interactive Session
+
+```
+╔════════════════════════════════════════════════════════════╗
+║        🎯 Rules Framework Interactive Setup Wizard         ║
+╔════════════════════════════════════════════════════════════╗
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Core Modules & Rules Configuration
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Enable Next.js frontend? [Y/n]: y
+Enable FastAPI Python backend? [Y/n]: y
+Enable auto GitHub repo creation? [Y/n]: y
+Enable Cloudflare deployment? [Y/n]: n
+Configure individual rule granularity? [y/N]: n
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  GitHub Repository Configuration
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Project name [my-project]: my-awesome-app
+Repository visibility:
+  1. private (default)
+  2. public
+Enter choice [1-2]: 1
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Downloading Framework Files...
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📥 Downloading MCP server...
+⚙️  Creating MCP configuration...
+📥 Downloading setup wizard...
+📥 Downloading package.json...
+📦 Installing dependencies...
+
+╔════════════════════════════════════════════════════════════╗
+║              🎉 Setup Complete! 🎉                         ║
+╚════════════════════════════════════════════════════════════╝
+
+Configuration Summary:
+  Next.js Frontend: yes
+  FastAPI Backend: yes
+  GitHub Integration: yes
+    - Repository Name: my-awesome-app
+    - Visibility: private
+  Cloudflare Deployment: no
+  Granular Rules: no
 ```
 
 ## 🔄 How It Works
