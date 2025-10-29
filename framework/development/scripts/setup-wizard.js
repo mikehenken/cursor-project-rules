@@ -164,6 +164,17 @@ async function setupNextJS() {
     });
   }
   
+  // Remove package-lock.json and node_modules if they exist (from npm install in setup.sh)
+  // create-next-app will recreate these with the correct dependencies
+  if (fs.existsSync('package-lock.json')) {
+    console.log('🗑️  Removing package-lock.json (will be recreated by Next.js)...');
+    fs.unlinkSync('package-lock.json');
+  }
+  if (fs.existsSync('node_modules')) {
+    console.log('🗑️  Removing node_modules (will be reinstalled by Next.js)...');
+    fs.rmSync('node_modules', { recursive: true, force: true });
+  }
+  
   // If there are other conflicting files, we need to handle them
   if (conflictingFiles.length > 0) {
     console.log(`⚠️  Warning: Found ${conflictingFiles.length} conflicting file(s): ${conflictingFiles.join(', ')}`);
