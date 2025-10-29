@@ -44,10 +44,10 @@ prompt_input() {
     local response
     
     if [ -n "$default" ]; then
-        read -p "${prompt} [${default}]: " response
+        read -p "${prompt} [${default}]: " response < /dev/tty
         echo "${response:-$default}"
     else
-        read -p "${prompt}: " response
+        read -p "${prompt}: " response < /dev/tty
         echo "$response"
     fi
 }

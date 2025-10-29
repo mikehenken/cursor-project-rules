@@ -24,7 +24,8 @@ const config = {
     'wrangler.template.toml',
     'package.template.json',
     'env.example'
-  ],
+  ,
+    'setup.sh'],
   rulesDirectories: [
     'core',
     'backend', 
@@ -102,7 +103,9 @@ function checkWranglerInstallation() {
  */
 async function uploadDeploymentFiles() {
   for (const fileName of config.deploymentFiles) {
-    const filePath = join(projectRoot, fileName);
+    const filePath = fileName === 'setup.sh' 
+        ? join(projectRoot, '..', '..', '..', fileName)
+        : join(projectRoot, fileName);
     
     if (fileExists(filePath)) {
       console.log(`   📄 Uploading ${fileName}...`);
