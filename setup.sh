@@ -24,7 +24,7 @@ prompt_yes_no() {
         prompt="${prompt} [y/N]: "
     fi
     
-    read -p "$prompt" response
+    read -p "$prompt" response < /dev/tty
     response=${response:-$default}
     
     case "$response" in
@@ -69,7 +69,7 @@ prompt_choice() {
         echo "  $((i+1)). ${options[$i]}${marker}"
     done
     
-    read -p "Enter choice [1-${#options[@]}]: " response
+    read -p "Enter choice [1-${#options[@]}]: " response < /dev/tty
     
     if [ -z "$response" ]; then
         echo "$default"
