@@ -50,10 +50,68 @@ const config = {
 };
 
 /**
+ * Run all tests before deployment
+ */
+async function runAllTests() {
+  console.log('🧪 Running all tests before deployment...\n');
+  
+  const tests = [
+    { name: 'MCP Server Tests', command: 'npm run test:mcp' },
+    { name: 'Framework Tests', command: 'npm run test:framework' }
+  ];
+
+  for (const test of tests) {
+    console.log(`📋 Running ${test.name}...`);
+    try {
+      execSync(test.command, { stdio: 'inherit', cwd: repoRoot });
+      console.log(`✅ ${test.name} passed!\n`);
+    } catch (error) {
+      console.error(`❌ ${test.name} failed!`);
+      console.error('   Fix the failing tests before deploying.\n');
+      throw new Error(`${test.name} failed`);
+    }
+  }
+  
+  console.log('✅ All tests passed!\n');
+}
+
+/**
  * Main deployment function
  */
 async function deployFramework() {
   console.log('🚀 Starting Rules Framework deployment to Cloudflare Workers...\n');
+
+  // Check if tests should be skipped (explicit --skip-tests flag)
+  const skipTests = process.argv.includes('--skip-tests') || process.argv.includes('--no-tests');
+  
+  // Check environment
+  const hasEnvFlag = process.argv.includes('--env') || process.argv.includes('-e');
+  let envValue = null;
+  
+  if (hasEnvFlag) {
+    const flagIndex = process.argv.includes('--env') 
+      ? process.argv.indexOf('--env')
+      : process.argv.indexOf('-e');
+    envValue = process.argv[flagIndex + 1] || null;
+  }
+  
+  const isProduction = !hasEnvFlag || envValue === 'production';
+  const environment = envValue || (isProduction ? 'production' : 'development');
+  
+  if (skipTests) {
+    console.log(`⚠️  Tests skipped (--skip-tests flag provided)\n`);
+  } else {
+    // Run all tests before deployment (production and staging)
+    console.log(`🧪 Running tests before ${environment} deployment...\n`);
+    try {
+      await runAllTests();
+    } catch (error) {
+      console.error('❌ Pre-deployment tests failed! Deployment aborted.');
+      console.error(`   Error: ${error.message}`);
+      console.error(`   Use --skip-tests to skip tests (not recommended)`);
+      process.exit(1);
+    }
+  }
 
   try {
     // Check if wrangler is installed
@@ -307,11 +365,22 @@ async function verifyR2Files() {
         continue;
       }
 
-      // Download from R2 REMOTE (Worker reads from remote)
+      // Download from Worker URL (what users actually get)
       const tempFile = join(tempDir, file.r2Key);
       try {
-        const command = `wrangler r2 object get ${config.r2Bucket}/${file.r2Key} --file "${tempFile}" --remote`;
+        const url = `${config.frameworkUrl}/files/${file.r2Key}`;
+        const command = `curl -s "${url}" -o "${tempFile}"`;
         execSync(command, { stdio: 'pipe' });
+        
+        // Verify file was downloaded
+        if (!fileExists(tempFile)) {
+          throw new Error(`Failed to download ${file.r2Key} from worker`);
+        }
+        
+        const downloadedSize = statSync(tempFile).size;
+        if (downloadedSize === 0) {
+          throw new Error(`Downloaded ${file.r2Key} is empty`);
+        }
         
         // Compare files
         const localContent = readFileSync(file.localPath, 'utf8');

@@ -111,11 +111,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     switch (name) {
       case 'list_rules':
-        return await listRules(args);
+        return await listRules(args || {});
       case 'get_rule':
-        return await getRule(args);
+        return await getRule(args || {});
       case 'enable_rules':
-        return await enableRules(args);
+        return await enableRules(args || {});
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
@@ -124,9 +124,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       content: [
         {
           type: 'text',
-          text: `Error: ${error.message}`
+          text: JSON.stringify({ error: error.message, tool: name }, null, 2)
         }
-      ]
+      ],
+      isError: true
     };
   }
 });
@@ -134,7 +135,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 /**
  * List available rules
  */
-async function listRules(purpose) {
+async function listRules(args) {
+  const { purpose } = args || {};
   const rules = [];
 
   if (purpose) {
@@ -200,7 +202,12 @@ function getRuleDescription(ruleName) {
  * Get a specific rule
  */
 async function getRule(args) {
-  const { purpose, ruleName } = args;
+  const { purpose, ruleName } = args || {};
+  
+  if (!purpose || !ruleName) {
+    throw new Error('Missing required parameters: purpose and ruleName are required');
+  }
+  
   const rulePath = join(config.rulesDir, purpose, ruleName);
   
   if (!existsSync(rulePath)) {
@@ -223,7 +230,12 @@ async function getRule(args) {
  * Enable rules in a project
  */
 async function enableRules(args) {
-  const { purposes, projectPath = process.cwd() } = args;
+  const { purposes, projectPath = process.cwd() } = args || {};
+  
+  if (!purposes || !Array.isArray(purposes) || purposes.length === 0) {
+    throw new Error('Missing required parameter: purposes must be a non-empty array');
+  }
+  
   const results = [];
 
   for (const purpose of purposes) {
@@ -231,13 +243,24 @@ async function enableRules(args) {
     const targetDir = join(projectPath, '.cursor', 'rules', purpose);
     
     if (existsSync(sourceDir)) {
+      // Ensure target directory exists
+      mkdirSync(join(projectPath, '.cursor', 'rules'), { recursive: true });
+      
       // Copy the entire purpose directory
-      execSync(`cp -r "${sourceDir}" "${targetDir}"`, { stdio: 'pipe' });
-      results.push({
-        purpose,
-        status: 'enabled',
-        path: targetDir
-      });
+      try {
+        execSync(`cp -r "${sourceDir}" "${targetDir}"`, { stdio: 'pipe' });
+        results.push({
+          purpose,
+          status: 'enabled',
+          path: targetDir
+        });
+      } catch (error) {
+        results.push({
+          purpose,
+          status: 'error',
+          error: error.message
+        });
+      }
     } else {
       results.push({
         purpose,

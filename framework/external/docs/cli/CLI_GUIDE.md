@@ -187,7 +187,7 @@ npx rules setup
 cat .cursor/mcp.json
 
 # Restart Cursor
-# Check Node.js version (requires v18+)
+# Check Node.js version (requires v20+)
 ```
 
 **Cloudflare deployment failed**

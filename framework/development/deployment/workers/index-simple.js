@@ -27,13 +27,20 @@ export default {
       } else if (path.startsWith('/api/')) {
         return handleAPI(path, request, env);
       } else if (path === '/setup' || path === '/setup.sh') {
-        return handleSetupScript(env);
+        // Handle legacy format - check for version in query string
+        const version = url.searchParams.get('v') || env.FRAMEWORK_VERSION || '1.3.2';
+        return handleSetupScript(env, version);
+      } else if (path.match(/^\/v[\d.]+\/setup\.sh$/)) {
+        // Handle versioned format: /v1.3.2/setup.sh
+        const versionMatch = path.match(/^\/v([\d.]+)\/setup\.sh$/);
+        const version = versionMatch ? versionMatch[1] : (env.FRAMEWORK_VERSION || '1.3.2');
+        return handleSetupScript(env, version);
       } else if (path === '/install') {
         return handleInstallScript(env);
       } else if (path.startsWith('/files/')) {
         return handleFileDownload(path, env);
       } else {
-        return new Response('Rules Framework API\n\nEndpoints:\n- GET /api/files\n- GET /api/rules\n- GET /api/docs\n- GET /setup (auto-setup script)\n- GET /install (installer script)', { 
+        return new Response('Rules Framework API\n\nEndpoints:\n- GET /api/files\n- GET /api/rules\n- GET /api/docs\n- GET /setup (auto-setup script)\n- GET /install (installer script)\n- GET /v<version>/setup.sh (versioned setup script)', { 
           status: 200, 
           headers: { ...corsHeaders, 'Content-Type': 'text/plain' }
         });
@@ -243,8 +250,10 @@ async function handleDocsList(env) {
 
 /**
  * Handle setup script request
+ * @param {Object} env - Worker environment
+ * @param {string} version - Framework version (optional)
  */
-async function handleSetupScript(env) {
+async function handleSetupScript(env, version = null) {
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -270,12 +279,22 @@ async function handleSetupScript(env) {
       });
     }
 
+    // Add version header if provided
+    const headers = {
+      'Content-Type': 'text/x-shellscript',
+      'Content-Disposition': 'inline; filename="setup.sh"',
+      ...corsHeaders
+    };
+
+    if (version) {
+      headers['X-Framework-Version'] = version;
+      // Add cache control with version-based cache key
+      headers['Cache-Control'] = `public, max-age=3600, immutable`;
+      headers['X-Version'] = version;
+    }
+
     return new Response(file.body, {
-      headers: {
-        'Content-Type': 'text/x-shellscript',
-        'Content-Disposition': 'inline; filename="setup.sh"',
-        ...corsHeaders
-      }
+      headers
     });
   } catch (error) {
     console.error('Error in handleSetupScript:', error);

@@ -71,6 +71,17 @@ async function deployFramework() {
   console.log('🚀 Starting Rules Framework deployment to Cloudflare Workers...\n');
 
   try {
+    // Run MCP tests before deployment
+    console.log('🧪 Running MCP server tests...');
+    try {
+      execSync('npm run test:mcp', { stdio: 'inherit', cwd: frameworkRoot });
+      console.log('✅ All MCP tests passed!\n');
+    } catch (error) {
+      console.error('❌ MCP tests failed! Deployment aborted.');
+      console.error('   Fix the failing tests before deploying.\n');
+      process.exit(1);
+    }
+
     // Check if wrangler is installed
     checkWranglerInstallation();
 

@@ -1,6 +1,6 @@
 {
   "name": "rules-framework",
-  "version": "1.0.0",
+  "version": "1.3.2",
   "description": "Cursor Rules Framework - Deployable to Cloudflare Workers with MCP Integration",
   "main": "framework/development/workers/index.js",
   "type": "module",
@@ -17,6 +17,7 @@
     "setup": "node framework/development/scripts/setup-wizard.js",
     "rules": "node framework/development/scripts/rules-cli.js",
     "test:framework": "node framework/development/scripts/rules-cli.js test",
+    "test:mcp": "node framework/development/tests/test-mcp-server.js",
     "mcp:server": "node framework/development/mcp-server.js",
     "mcp:install": "npm install @modelcontextprotocol/sdk"
   },

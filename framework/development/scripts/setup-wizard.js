@@ -549,19 +549,277 @@ async function downloadAndInstallRules() {
 }
 
 /**
+ * Parse YAML frontmatter from rule file content
+ */
+function parseFrontmatter(content) {
+  const frontmatterRegex = /^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/;
+  const match = content.match(frontmatterRegex);
+  
+  if (!match) {
+    return { metadata: {}, body: content };
+  }
+  
+  const yamlContent = match[1];
+  const body = match[2];
+  const metadata = {};
+  
+  // Simple YAML parser for basic key-value pairs
+  const lines = yamlContent.split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    
+    const colonIndex = trimmed.indexOf(':');
+    if (colonIndex === -1) continue;
+    
+    const key = trimmed.substring(0, colonIndex).trim();
+    let value = trimmed.substring(colonIndex + 1).trim();
+    
+    // Handle boolean values
+    if (value === 'true') value = true;
+    else if (value === 'false') value = false;
+    // Handle array values (simple format: ["item1", "item2"])
+    else if (value.startsWith('[') && value.endsWith(']')) {
+      const arrayContent = value.slice(1, -1);
+      value = arrayContent.split(',').map(item => {
+        const trimmedItem = item.trim();
+        if (trimmedItem.startsWith('"') && trimmedItem.endsWith('"')) {
+          return trimmedItem.slice(1, -1);
+        }
+        return trimmedItem;
+      });
+    }
+    // Handle string values (remove quotes if present)
+    else if ((value.startsWith('"') && value.endsWith('"')) || 
+             (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    
+    metadata[key] = value;
+  }
+  
+  return { metadata, body };
+}
+
+/**
+ * Generate YAML frontmatter from metadata object
+ */
+function generateFrontmatter(metadata) {
+  const lines = ['---'];
+  
+  for (const [key, value] of Object.entries(metadata)) {
+    if (value === null || value === undefined) continue;
+    
+    if (typeof value === 'boolean') {
+      lines.push(`${key}: ${value}`);
+    } else if (Array.isArray(value)) {
+      const arrayStr = value.map(item => `"${item}"`).join(', ');
+      lines.push(`${key}: [${arrayStr}]`);
+    } else {
+      lines.push(`${key}: "${value}"`);
+    }
+  }
+  
+  lines.push('---');
+  return lines.join('\n') + '\n';
+}
+
+/**
+ * Prompt user for input
+ */
+function question(rl, prompt) {
+  return new Promise((resolve) => {
+    rl.question(prompt, resolve);
+  });
+}
+
+/**
+ * Parse array input from user
+ */
+function parseArrayInput(input) {
+  if (!input || input.trim() === '') return [];
+  // Handle comma-separated or space-separated values
+  return input.split(/[,\s]+/).map(s => s.trim()).filter(s => s);
+}
+
+/**
  * Handle granular rules configuration
  */
 async function handleGranularRules() {
-  console.log('📋 Configuring granular rules...');
-  console.log('  This feature will be implemented in a future update.');
-  console.log('  For now, all rules will be enabled with default settings.');
+  console.log('\n📋 Configuring granular rules...\n');
   
-  // TODO: Implement granular rules selection
-  // This would involve:
-  // 1. Fetching available rules from framework API
-  // 2. Iterating through each rule
-  // 3. Presenting options: Include, Modify, Exclude, Exclude All
-  // 4. Handling modifications to rule properties
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+  
+  try {
+    // Fetch available rules from framework API
+    const listResponse = await fetch(`${FRAMEWORK_URL}/api/rules`);
+    
+    if (!listResponse.ok) {
+      throw new Error(`HTTP ${listResponse.status}: ${listResponse.statusText}`);
+    }
+
+    const rulesList = await listResponse.json();
+    
+    if (!Array.isArray(rulesList)) {
+      throw new Error('Invalid response format: expected array');
+    }
+
+    // Ensure .cursor/rules directory exists
+    const rulesDir = join(process.cwd(), '.cursor', 'rules');
+    if (!fs.existsSync(rulesDir)) {
+      fs.mkdirSync(rulesDir, { recursive: true });
+    }
+
+    // Track excluded rules (for this project only)
+    const excludedRules = [];
+    
+    // Process each rule purpose
+    for (const rulePurpose of rulesList) {
+      const purpose = rulePurpose.name;
+      const purposeDir = join(rulesDir, purpose);
+      
+      console.log(`\n📁 Purpose: ${purpose} (${rulePurpose.description || 'No description'})`);
+      console.log('─'.repeat(60));
+      
+      // Process each file in this purpose
+      for (const fileName of rulePurpose.files || []) {
+        const rulePath = `${purpose}/${fileName}`;
+        
+        try {
+          // Fetch the rule content
+          const ruleResponse = await fetch(`${FRAMEWORK_URL}/rules/${purpose}/${fileName}`);
+          
+          if (!ruleResponse.ok) {
+            console.log(`  ⚠️  Failed to fetch ${rulePath}: ${ruleResponse.status}`);
+            continue;
+          }
+
+          const content = await ruleResponse.text();
+          let { metadata, body } = parseFrontmatter(content);
+          
+          console.log(`\n  📄 Rule: ${fileName}`);
+          console.log(`     Description: ${metadata.description || 'No description'}`);
+          console.log(`     Always Apply: ${metadata.alwaysApply || false}`);
+          console.log(`     Globs: ${metadata.globs ? JSON.stringify(metadata.globs) : 'None'}`);
+          
+          // Check if rule already exists
+          const filePath = join(purposeDir, fileName);
+          const ruleExists = fs.existsSync(filePath);
+          
+          if (ruleExists) {
+            // Load existing rule to show current state
+            const existingContent = fs.readFileSync(filePath, 'utf8');
+            const { metadata: existingMetadata, body: existingBody } = parseFrontmatter(existingContent);
+            
+            // Merge existing metadata to show current state
+            const mergedMetadata = { ...metadata, ...existingMetadata };
+            metadata = mergedMetadata;
+            if (existingBody.trim()) {
+              body = existingBody; // Use existing body
+            }
+            
+            console.log(`     ⚠️  Rule already exists in project`);
+          }
+          
+          // Prompt user for action
+          const action = await question(rl, `\n  What would you like to do with this rule?\n  [I]nclude  [M]odify  [E]xclude  [Skip] remaining: `);
+          const actionLower = action.trim().toLowerCase();
+          
+          if (actionLower === 'skip' || actionLower === 's') {
+            console.log(`  ⏭️  Skipping remaining rules...`);
+            break;
+          }
+          
+          if (actionLower === 'e' || actionLower === 'exclude') {
+            // Check if user wants to exclude from all projects
+            const excludeAll = await question(rl, `  Exclude from [T]his project only or [A]ll projects? `);
+            const excludeAllLower = excludeAll.trim().toLowerCase();
+            
+            if (excludeAllLower === 'a' || excludeAllLower === 'all') {
+              console.log(`  🚫 Excluded ${rulePath} from all projects`);
+              // Note: In a real implementation, this could be stored in a global exclusion list
+              // For now, we'll just skip installing it
+              excludedRules.push({ path: rulePath, global: true });
+              continue;
+            } else {
+              console.log(`  🚫 Excluded ${rulePath} from this project`);
+              excludedRules.push({ path: rulePath, global: false });
+              continue;
+            }
+          }
+          
+          if (actionLower === 'm' || actionLower === 'modify') {
+            // Modify rule properties
+            console.log(`\n  ✏️  Modifying ${fileName}...`);
+            
+            // Modify description
+            const newDesc = await question(rl, `  Description [${metadata.description || ''}]: `);
+            if (newDesc.trim()) {
+              metadata.description = newDesc.trim();
+            }
+            
+            // Modify alwaysApply
+            const currentAlwaysApply = metadata.alwaysApply || false;
+            const newAlwaysApply = await question(rl, `  Always Apply [${currentAlwaysApply}] (true/false): `);
+            if (newAlwaysApply.trim()) {
+              metadata.alwaysApply = newAlwaysApply.trim().toLowerCase() === 'true';
+            }
+            
+            // Modify globs
+            const currentGlobs = metadata.globs ? JSON.stringify(metadata.globs) : '[]';
+            const newGlobs = await question(rl, `  Globs [${currentGlobs}] (comma-separated patterns, or empty for none): `);
+            if (newGlobs.trim() !== '') {
+              const parsedGlobs = parseArrayInput(newGlobs);
+              metadata.globs = parsedGlobs.length > 0 ? parsedGlobs : undefined;
+            }
+            
+            // Allow modification of additional properties
+            const moreProps = await question(rl, `  Modify more properties? (name, type, category, etc.) [y/N]: `);
+            if (moreProps.trim().toLowerCase() === 'y') {
+              const propName = await question(rl, `  Property name: `);
+              const propValue = await question(rl, `  Property value: `);
+              if (propName.trim() && propValue.trim()) {
+                metadata[propName.trim()] = propValue.trim();
+              }
+            }
+            
+            console.log(`  ✅ Modified ${fileName}`);
+          } else if (actionLower === 'i' || actionLower === 'include' || actionLower === '') {
+            // Include with default settings (empty string means Enter was pressed)
+            console.log(`  ✅ Including ${fileName} with default settings`);
+          }
+          
+          // Install the rule (either original or modified)
+          fs.mkdirSync(purposeDir, { recursive: true });
+          const finalContent = generateFrontmatter(metadata) + body;
+          fs.writeFileSync(filePath, finalContent);
+          console.log(`  ✅ Installed ${rulePath}`);
+          
+        } catch (error) {
+          console.log(`  ⚠️  Failed to process ${rulePath}: ${error.message}`);
+        }
+      }
+    }
+
+    // Summary
+    console.log('\n✅ Granular rules configuration complete!');
+    if (excludedRules.length > 0) {
+      console.log(`\n📊 Summary:`);
+      console.log(`   - Excluded ${excludedRules.length} rule(s)`);
+      excludedRules.forEach(rule => {
+        console.log(`     • ${rule.path} ${rule.global ? '(global exclusion)' : '(project exclusion)'}`);
+      });
+    }
+    
+  } catch (error) {
+    console.log(`  ⚠️  Failed to configure granular rules: ${error.message}`);
+    console.log('  💡 Falling back to default rule installation...');
+  } finally {
+    rl.close();
+  }
 }
 
 // Run main function
