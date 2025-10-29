@@ -6,11 +6,12 @@
  * Accepts command-line flags from setup.sh
  */
 
-import { execSync } from 'child_process';
+import { execSync, spawnSync } from 'child_process';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { dirname, join, basename } from 'path';
 import { createInterface } from 'readline';
+import os from 'os';
 
 // Framework URL - can be overridden via environment variable
 const FRAMEWORK_URL = process.env.RULES_FRAMEWORK_URL || 'https://rules-framework.mikehenken.workers.dev';
@@ -79,6 +80,9 @@ async function main() {
     if (config.granularRules) {
       await handleGranularRules();
     }
+
+    // Always create README and docs structure
+    await createProjectDocumentation(config);
 
     console.log('\n🎉 Setup Complete!');
     console.log('==================\n');
@@ -854,6 +858,56 @@ function parseArrayInput(input) {
 }
 
 /**
+ * Edit rule content using user's editor
+ * Opens a temporary file in the user's default editor
+ */
+async function editRuleContent(initialContent, ruleName) {
+  const tmpDir = os.tmpdir();
+  const tmpFile = join(tmpDir, `rule-edit-${Date.now()}-${ruleName.replace(/\//g, '-')}.mdc`);
+  
+  // Write initial content to temp file
+  fs.writeFileSync(tmpFile, initialContent);
+  
+  // Determine editor (use $EDITOR, or common defaults)
+  const editor = process.env.EDITOR || process.env.VISUAL || (process.platform === 'win32' ? 'notepad' : 'nano');
+  
+  console.log(`  📝 Opening ${ruleName} in ${editor}...`);
+  console.log(`  💡 Save and close the editor to continue, or Ctrl+C to cancel`);
+  
+  // Open editor
+  const result = spawnSync(editor, [tmpFile], {
+    stdio: 'inherit',
+    shell: process.platform === 'win32'
+  });
+  
+  if (result.error) {
+    throw new Error(`Failed to open editor: ${result.error.message}`);
+  }
+  
+  if (result.signal === 'SIGINT' || result.status === 130) {
+    // User cancelled (Ctrl+C)
+    fs.unlinkSync(tmpFile);
+    return null;
+  }
+  
+  // Read edited content
+  if (!fs.existsSync(tmpFile)) {
+    throw new Error('Temporary file was deleted during editing');
+  }
+  
+  const editedContent = fs.readFileSync(tmpFile, 'utf8');
+  
+  // Clean up temp file
+  try {
+    fs.unlinkSync(tmpFile);
+  } catch (err) {
+    // Ignore cleanup errors
+  }
+  
+  return editedContent;
+}
+
+/**
  * Handle granular rules configuration
  */
 async function handleGranularRules() {
@@ -978,35 +1032,62 @@ async function handleGranularRules() {
             // Modify rule properties
             console.log(`\n  ✏️  Modifying ${fileName}...`);
             
-            // Modify description
-            const newDesc = await question(rl, `  Description [${metadata.description || ''}]: `);
-            if (newDesc.trim()) {
-              metadata.description = newDesc.trim();
-            }
+            // Ask what to modify
+            const modifyType = await question(rl, `  Modify [M]etadata, [C]ontent, or [B]oth? [M]: `);
+            const modifyTypeLower = modifyType.trim().toLowerCase() || 'm';
             
-            // Modify alwaysApply
-            const currentAlwaysApply = metadata.alwaysApply || false;
-            const newAlwaysApply = await question(rl, `  Always Apply [${currentAlwaysApply}] (true/false): `);
-            if (newAlwaysApply.trim()) {
-              metadata.alwaysApply = newAlwaysApply.trim().toLowerCase() === 'true';
-            }
-            
-            // Modify globs
-            const currentGlobs = metadata.globs ? JSON.stringify(metadata.globs) : '[]';
-            const newGlobs = await question(rl, `  Globs [${currentGlobs}] (comma-separated patterns, or empty for none): `);
-            if (newGlobs.trim() !== '') {
-              const parsedGlobs = parseArrayInput(newGlobs);
-              metadata.globs = parsedGlobs.length > 0 ? parsedGlobs : undefined;
-            }
-            
-            // Allow modification of additional properties
-            const moreProps = await question(rl, `  Modify more properties? (name, type, category, etc.) [y/N]: `);
-            if (moreProps.trim().toLowerCase() === 'y') {
-              const propName = await question(rl, `  Property name: `);
-              const propValue = await question(rl, `  Property value: `);
-              if (propName.trim() && propValue.trim()) {
-                metadata[propName.trim()] = propValue.trim();
+            if (modifyTypeLower === 'c' || modifyTypeLower === 'content' || modifyTypeLower === 'b' || modifyTypeLower === 'both') {
+              // Edit rule content
+              try {
+                const editedBody = await editRuleContent(body, fileName);
+                if (editedBody !== null) {
+                  body = editedBody;
+                  console.log(`  ✅ Content modified`);
+                } else {
+                  console.log(`  ⏭️  Content editing cancelled`);
+                }
+              } catch (error) {
+                console.log(`  ⚠️  Failed to edit content: ${error.message}`);
+                const continueEdit = await question(rl, `  Continue with metadata editing? [Y/n]: `);
+                if (continueEdit.trim().toLowerCase() === 'n') {
+                  continue;
+                }
               }
+            }
+            
+            if (modifyTypeLower === 'm' || modifyTypeLower === 'metadata' || modifyTypeLower === 'b' || modifyTypeLower === 'both') {
+              // Modify description
+              const newDesc = await question(rl, `  Description [${metadata.description || ''}]: `);
+              if (newDesc.trim()) {
+                metadata.description = newDesc.trim();
+              }
+              
+              // Modify alwaysApply
+              const currentAlwaysApply = metadata.alwaysApply || false;
+              const newAlwaysApply = await question(rl, `  Always Apply [${currentAlwaysApply}] (true/false): `);
+              if (newAlwaysApply.trim()) {
+                metadata.alwaysApply = newAlwaysApply.trim().toLowerCase() === 'true';
+              }
+              
+              // Modify globs
+              const currentGlobs = metadata.globs ? JSON.stringify(metadata.globs) : '[]';
+              const newGlobs = await question(rl, `  Globs [${currentGlobs}] (comma-separated patterns, or empty for none): `);
+              if (newGlobs.trim() !== '') {
+                const parsedGlobs = parseArrayInput(newGlobs);
+                metadata.globs = parsedGlobs.length > 0 ? parsedGlobs : undefined;
+              }
+              
+              // Allow modification of additional properties
+              const moreProps = await question(rl, `  Modify more properties? (name, type, category, etc.) [y/N]: `);
+              if (moreProps.trim().toLowerCase() === 'y') {
+                const propName = await question(rl, `  Property name: `);
+                const propValue = await question(rl, `  Property value: `);
+                if (propName.trim() && propValue.trim()) {
+                  metadata[propName.trim()] = propValue.trim();
+                }
+              }
+              
+              console.log(`  ✅ Metadata modified`);
             }
             
             console.log(`  ✅ Modified ${fileName}`);
@@ -1043,6 +1124,416 @@ async function handleGranularRules() {
   } finally {
     rl.close();
   }
+}
+
+/**
+ * Create project README.md and documentation structure
+ */
+async function createProjectDocumentation(config) {
+  console.log('📝 Creating project documentation structure...');
+  
+  // Get project name from config or directory name
+  const projectName = config.repoName || basename(process.cwd());
+  
+  // Create README.md
+  await createREADME(projectName, config);
+  
+  // Create docs directory structure
+  await createDocsStructure(config);
+  
+  console.log('  ✅ Documentation structure created');
+}
+
+/**
+ * Create README.md in project root
+ */
+async function createREADME(projectName, config) {
+  const readmePath = join(process.cwd(), 'README.md');
+  
+  // Don't overwrite existing README
+  if (fs.existsSync(readmePath)) {
+    console.log('  ℹ️  README.md already exists, skipping...');
+    return;
+  }
+  
+  const components = [];
+  if (config.nextjs) components.push('Next.js Frontend');
+  if (config.fastapi) components.push('FastAPI Backend');
+  
+  const componentsList = components.length > 0 
+    ? `\n- ${components.join('\n- ')}` 
+    : '';
+  
+  const readmeContent = `# ${projectName}
+
+${components.length > 0 ? `A modern web application built with ${components.join(' and ')}.` : 'A new project with Rules Framework integration.'}
+
+## 🚀 Quick Start
+
+${config.nextjs ? `### Frontend Development
+\`\`\`bash
+cd frontend
+npm install
+npm run dev
+\`\`\`
+` : ''}
+${config.fastapi ? `### Backend Development
+\`\`\`bash
+cd backend
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\\Scripts\\activate
+pip install -r requirements.txt
+uvicorn main:app --reload
+\`\`\`
+` : ''}
+## 📚 Documentation
+
+Comprehensive documentation is available in the [\`docs/\`](./docs/) directory:
+
+- [Setup & Installation](./docs/setup/) - Getting started guides
+- [Development](./docs/development/) - Developer workflows and standards
+- [Features](./docs/features/) - Feature-specific documentation
+- [Guides](./docs/guides/) - How-to guides and best practices
+${config.fastapi ? '- [API Documentation](./docs/api/) - API endpoints and authentication' : ''}
+
+See [docs/DOCS_INDEX.md](./docs/DOCS_INDEX.md) for a complete index of all documentation.
+
+## 🛠️ Project Structure
+
+\`\`\`
+${projectName}/
+${config.nextjs ? '├── frontend/              # Next.js frontend application\n' : ''}${config.fastapi ? '├── backend/                # FastAPI backend application\n' : ''}├── docs/                  # Project documentation
+├── .cursor/                # Cursor IDE rules
+└── README.md              # This file
+\`\`\`
+
+${config.github ? `## 🔗 GitHub Repository
+
+Repository: \`${config.repoName}\`
+Visibility: \`${config.repoVisibility}\`
+` : ''}
+${config.cloudflare ? `## ☁️ Cloudflare Deployment
+
+Deployment Target: \`${config.cloudflareTarget}\`
+
+See [docs/setup/DEPLOYMENT.md](./docs/setup/DEPLOYMENT.md) for deployment instructions.
+` : ''}
+## 📋 Rules Framework
+
+This project uses the [Rules Framework](https://rules-framework.mikehenken.workers.dev) for Cursor IDE integration.
+
+- Rules are configured in \`.cursor/rules/\`
+- MCP server provides framework integration
+- Use \`@rules-framework\` commands in Cursor chat
+
+---
+
+For detailed documentation, see the [docs directory](./docs/).
+`;
+
+  fs.writeFileSync(readmePath, readmeContent);
+  console.log('  ✅ Created README.md');
+}
+
+/**
+ * Create complete docs directory structure
+ */
+async function createDocsStructure(config) {
+  const docsPath = join(process.cwd(), 'docs');
+  
+  // Create all required subdirectories
+  const subdirs = [
+    'setup',
+    'development',
+    'features',
+    'guides',
+    'api',
+    'status'
+  ];
+  
+  subdirs.forEach(subdir => {
+    const dirPath = join(docsPath, subdir);
+    if (!fs.existsSync(dirPath)) {
+      fs.mkdirSync(dirPath, { recursive: true });
+    }
+  });
+  
+  // Create placeholder files in setup/
+  const setupDir = join(docsPath, 'setup');
+  if (!fs.existsSync(join(setupDir, 'QUICK_START.md'))) {
+    fs.writeFileSync(join(setupDir, 'QUICK_START.md'), `# Quick Start Guide
+
+Get up and running with ${basename(process.cwd())} quickly.
+
+## Prerequisites
+
+${config.nextjs ? '- Node.js 18+ and npm\n' : ''}${config.fastapi ? '- Python 3.11+\n' : ''}
+
+## Installation
+
+${config.nextjs ? `### Frontend
+\`\`\`bash
+cd frontend
+npm install
+npm run dev
+\`\`\`
+` : ''}${config.fastapi ? `### Backend
+\`\`\`bash
+cd backend
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload
+\`\`\`
+` : ''}
+## Next Steps
+
+- See [INSTALLATION.md](./INSTALLATION.md) for detailed setup instructions
+- Check [CONFIGURATION.md](./CONFIGURATION.md) for configuration options
+- Review [docs/development/](./../development/) for development workflows
+`);
+  }
+  
+  if (!fs.existsSync(join(setupDir, 'INSTALLATION.md'))) {
+    fs.writeFileSync(join(setupDir, 'INSTALLATION.md'), `# Installation Guide
+
+Detailed installation instructions for ${basename(process.cwd())}.
+
+## Requirements
+
+${config.nextjs ? '- Node.js 18+ and npm\n' : ''}${config.fastapi ? '- Python 3.11+\n' : ''}
+
+## Step-by-Step Installation
+
+${config.nextjs ? `### Install Frontend Dependencies
+\`\`\`bash
+cd frontend
+npm install
+\`\`\`
+` : ''}${config.fastapi ? `### Setup Python Environment
+\`\`\`bash
+cd backend
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\\Scripts\\activate
+pip install -r requirements.txt
+\`\`\`
+` : ''}
+## Verification
+
+${config.nextjs ? `Verify frontend installation:
+\`\`\`bash
+cd frontend
+npm run build
+\`\`\`
+` : ''}${config.fastapi ? `Verify backend installation:
+\`\`\`bash
+cd backend
+source venv/bin/activate
+python -c "import fastapi; print(fastapi.__version__)"
+\`\`\`
+` : ''}
+## Troubleshooting
+
+See [docs/guides/troubleshooting.md](./../guides/troubleshooting.md) for common issues.
+`);
+  }
+  
+  if (!fs.existsSync(join(setupDir, 'DEPLOYMENT.md'))) {
+    const deploymentContent = config.cloudflare 
+      ? `# Deployment Guide
+
+Deploy ${basename(process.cwd())} to ${config.cloudflareTarget}.
+
+## Prerequisites
+
+- Cloudflare account with API token
+- Wrangler CLI installed (if using Cloudflare Workers)
+
+## Deployment Steps
+
+${config.cloudflareTarget === 'Cloudflare Workers' ? `### Deploy to Cloudflare Workers
+\`\`\`bash
+npx wrangler pages deploy frontend
+\`\`\`
+` : `### Deploy to Cloudflare Pages
+\`\`\`bash
+npx wrangler pages deploy frontend
+\`\`\`
+`}
+${config.fastapi ? `### Deploy Backend
+See backend-specific deployment documentation.
+` : ''}
+## Configuration
+
+Configuration is managed via:
+- \`.env\` file (not committed to git)
+- \`wrangler.toml\` (Cloudflare Workers configuration)
+
+See [CONFIGURATION.md](./CONFIGURATION.md) for details.
+`
+      : `# Deployment Guide
+
+Deployment instructions for ${basename(process.cwd())}.
+
+## Deployment Options
+
+${config.fastapi ? `### Backend Deployment
+Deploy the FastAPI backend to your preferred hosting platform.
+
+Common options:
+- Docker containers
+- Cloud platforms (AWS, GCP, Azure)
+- PaaS services (Heroku, Railway, Render)
+` : ''}
+## Configuration
+
+See [CONFIGURATION.md](./CONFIGURATION.md) for deployment configuration details.
+`;
+    
+    fs.writeFileSync(join(setupDir, 'DEPLOYMENT.md'), deploymentContent);
+  }
+  
+  if (!fs.existsSync(join(setupDir, 'CONFIGURATION.md'))) {
+    fs.writeFileSync(join(setupDir, 'CONFIGURATION.md'), `# Configuration Guide
+
+Configuration options for ${basename(process.cwd())}.
+
+## Environment Variables
+
+${config.cloudflare ? `### Cloudflare Configuration
+\`\`\`bash
+CLOUDFLARE_API_TOKEN=your_token_here
+CLOUDFLARE_ACCOUNT_ID=your_account_id_here
+\`\`\`
+` : ''}
+## Configuration Files
+
+${config.nextjs ? `- \`frontend/.env.local\` - Frontend environment variables
+` : ''}${config.fastapi ? `- \`backend/.env\` - Backend environment variables
+` : ''}${config.cloudflare ? `- \`wrangler.toml\` - Cloudflare Workers configuration
+` : ''}- \`.cursor/mcp.json\` - MCP server configuration
+
+## Customization
+
+For project-specific configuration, see:
+- [docs/development/ARCHITECTURE.md](./../development/ARCHITECTURE.md) - Architecture overview
+- [docs/guides/](./../guides/) - Customization guides
+`);
+  }
+  
+  // Create placeholder files in development/
+  const developmentDir = join(docsPath, 'development');
+  if (!fs.existsSync(join(developmentDir, 'CONTRIBUTING.md'))) {
+    fs.writeFileSync(join(developmentDir, 'CONTRIBUTING.md'), `# Contributing Guide
+
+Contributing guidelines for ${basename(process.cwd())}.
+
+## Development Setup
+
+See [docs/setup/INSTALLATION.md](./../setup/INSTALLATION.md) for setup instructions.
+
+## Code Style
+
+- Follow the project's code style guidelines
+- Run linters before committing
+- Write tests for new features
+
+## Pull Request Process
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
+
+See [CODE_STYLE.md](./CODE_STYLE.md) for detailed style guidelines.
+`);
+  }
+  
+  // Create DOCS_INDEX.md
+  await createDocsIndex(docsPath, config);
+  
+  console.log('  ✅ Created docs directory structure');
+}
+
+/**
+ * Create DOCS_INDEX.md with links to all documentation
+ */
+async function createDocsIndex(docsPath, config) {
+  const indexPath = join(docsPath, 'DOCS_INDEX.md');
+  
+  if (fs.existsSync(indexPath)) {
+    // Don't overwrite existing index
+    return;
+  }
+  
+  const projectName = basename(process.cwd());
+  
+  const indexContent = `# Documentation Index
+
+Complete index of documentation for ${projectName}.
+
+## 📚 Overview
+
+This directory contains all project documentation organized by purpose and feature.
+
+## 📂 Directory Structure
+
+### [Setup](./setup/)
+Installation, deployment, and configuration guides.
+
+- [QUICK_START.md](./setup/QUICK_START.md) - Get started quickly
+- [INSTALLATION.md](./setup/INSTALLATION.md) - Detailed installation instructions
+- [DEPLOYMENT.md](./setup/DEPLOYMENT.md) - Deployment guide
+- [CONFIGURATION.md](./setup/CONFIGURATION.md) - Configuration options
+
+### [Development](./development/)
+Developer guides, workflows, and coding standards.
+
+- [CONTRIBUTING.md](./development/CONTRIBUTING.md) - How to contribute
+- [ARCHITECTURE.md](./development/ARCHITECTURE.md) - System architecture (to be added)
+- [TESTING_STRATEGY.md](./development/TESTING_STRATEGY.md) - Testing guidelines (to be added)
+- [CODE_STYLE.md](./development/CODE_STYLE.md) - Code style guide (to be added)
+
+### [Features](./features/)
+Feature-specific documentation organized by domain/module.
+
+*To be populated as features are documented.*
+
+### [Guides](./guides/)
+General how-to guides and best practices.
+
+- Create [troubleshooting.md](./guides/troubleshooting.md) for common issues
+- Create [best-practices.md](./guides/best-practices.md) for development best practices
+- Create [integration-guides.md](./guides/integration-guides.md) for integration examples
+
+${config.fastapi ? `### [API](./api/)
+API endpoint documentation.
+
+- [endpoints.md](./api/endpoints.md) - API endpoint reference (to be added)
+- [authentication.md](./api/authentication.md) - Authentication guide (to be added)
+` : ''}
+### [Status](./status/)
+Project status, changelogs, and migration notes.
+
+- [CHANGELOG.md](./status/CHANGELOG.md) - Project changelog (to be added)
+- [completion-reports.md](./status/completion-reports.md) - Completion reports (to be added)
+- [migration-notes.md](./status/migration-notes.md) - Migration notes (to be added)
+
+## 📝 Documentation Standards
+
+- Use UPPER_CASE for major documents (QUICK_START.md, ARCHITECTURE.md)
+- Use kebab-case for feature-specific docs (user-authentication.md)
+- Keep documentation up to date
+- Update this index when adding new documentation
+
+## 🔗 Quick Links
+
+- [README.md](../README.md) - Project overview
+${config.nextjs ? `- [Frontend README](../frontend/README.md) - Frontend documentation` : ''}${config.fastapi ? `\n- [Backend README](../backend/README.md) - Backend documentation` : ''}
+`;
+
+  fs.writeFileSync(indexPath, indexContent);
+  console.log('  ✅ Created docs/DOCS_INDEX.md');
 }
 
 // Run main function

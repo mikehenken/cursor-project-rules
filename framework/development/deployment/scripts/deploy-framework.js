@@ -6,7 +6,7 @@
  */
 
 import { execSync } from 'child_process';
-import { readFileSync, readdirSync, statSync, mkdirSync, rmSync } from 'fs';
+import { readFileSync, readdirSync, statSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join, relative } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -50,6 +50,59 @@ const config = {
 };
 
 /**
+ * Increment semantic version (patch version)
+ */
+function incrementVersion(version) {
+  const parts = version.split('.');
+  if (parts.length !== 3) {
+    throw new Error(`Invalid version format: ${version}. Expected format: x.y.z`);
+  }
+  
+  const major = parseInt(parts[0], 10);
+  const minor = parseInt(parts[1], 10);
+  const patch = parseInt(parts[2], 10);
+  
+  return `${major}.${minor}.${patch + 1}`;
+}
+
+/**
+ * Read and update package.json version
+ */
+function updatePackageJsonVersion(newVersion) {
+  const packageJsonPath = join(repoRoot, 'package.json');
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+  const oldVersion = packageJson.version;
+  
+  packageJson.version = newVersion;
+  writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + '\n');
+  
+  console.log(`   📝 Updated package.json: ${oldVersion} → ${newVersion}`);
+  return { oldVersion, newVersion };
+}
+
+/**
+ * Update wrangler.toml FRAMEWORK_VERSION
+ */
+function updateWranglerVersion(newVersion) {
+  const wranglerPath = join(deploymentDir, 'wrangler.toml');
+  let wranglerContent = readFileSync(wranglerPath, 'utf8');
+  
+  // Update FRAMEWORK_VERSION in [vars] section
+  const versionRegex = /(FRAMEWORK_VERSION\s*=\s*)"[\d.]+"/;
+  const oldMatch = wranglerContent.match(versionRegex);
+  const oldVersion = oldMatch ? oldMatch[0].match(/"([^"]+)"/)[1] : null;
+  
+  wranglerContent = wranglerContent.replace(versionRegex, `$1"${newVersion}"`);
+  writeFileSync(wranglerPath, wranglerContent);
+  
+  if (oldVersion) {
+    console.log(`   📝 Updated wrangler.toml: ${oldVersion} → ${newVersion}`);
+  } else {
+    console.log(`   📝 Updated wrangler.toml with version: ${newVersion}`);
+  }
+}
+
+/**
  * Run all tests before deployment
  */
 async function runAllTests() {
@@ -80,6 +133,17 @@ async function runAllTests() {
  */
 async function deployFramework() {
   console.log('🚀 Starting Rules Framework deployment to Cloudflare Workers...\n');
+
+  // Increment version before deployment
+  console.log('📌 Updating version...');
+  const packageJsonPath = join(repoRoot, 'package.json');
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+  const currentVersion = packageJson.version;
+  const newVersion = incrementVersion(currentVersion);
+  
+  updatePackageJsonVersion(newVersion);
+  updateWranglerVersion(newVersion);
+  console.log();
 
   // Check if tests should be skipped (explicit --skip-tests flag)
   const skipTests = process.argv.includes('--skip-tests') || process.argv.includes('--no-tests');
@@ -142,7 +206,11 @@ async function deployFramework() {
     await testSetupWizard();
 
     console.log('\n✅ Rules Framework deployed successfully!');
-    console.log('🌐 Your framework is now available at your Cloudflare Workers URL');
+    console.log(`📌 Version: ${newVersion}`);
+    console.log('\n🔗 Setup URLs:');
+    console.log(`   Standard:  ${config.frameworkUrl}/files/setup.sh`);
+    console.log(`   Versioned: ${config.frameworkUrl}/v${newVersion}/setup.sh`);
+    console.log('\n🌐 Your framework is now available at your Cloudflare Workers URL');
     console.log('📖 API endpoints:');
     console.log('   - GET /api/files - List deployment files');
     console.log('   - GET /api/rules - List rules files');

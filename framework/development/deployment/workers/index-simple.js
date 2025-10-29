@@ -39,8 +39,10 @@ export default {
         return handleInstallScript(env);
       } else if (path.startsWith('/files/')) {
         return handleFileDownload(path, env);
+      } else if (path.startsWith('/rules/')) {
+        return handleRules(path, env);
       } else {
-        return new Response('Rules Framework API\n\nEndpoints:\n- GET /api/files\n- GET /api/rules\n- GET /api/docs\n- GET /setup (auto-setup script)\n- GET /install (installer script)\n- GET /v<version>/setup.sh (versioned setup script)', { 
+        return new Response('Rules Framework API\n\nEndpoints:\n- GET /api/files\n- GET /api/rules\n- GET /api/docs\n- GET /rules/{purpose}/{filename}\n- GET /setup (auto-setup script)\n- GET /install (installer script)\n- GET /v<version>/setup.sh (versioned setup script)', { 
           status: 200, 
           headers: { ...corsHeaders, 'Content-Type': 'text/plain' }
         });
@@ -379,6 +381,39 @@ async function handleFileDownload(path, env) {
   };
 
   return new Response(file.body, { headers });
+}
+
+/**
+ * Handle rules requests
+ */
+async function handleRules(path, env) {
+  const rulePath = path.replace('/rules/', '');
+  
+  // Check if R2 storage is available
+  if (!env.RULES_STORAGE) {
+    return new Response('R2 storage not configured. Please enable R2 in Cloudflare Dashboard.', { 
+      status: 503,
+      headers: {
+        'Content-Type': 'text/plain',
+        'Access-Control-Allow-Origin': '*'
+      }
+    });
+  }
+  
+  // Get rule from R2 storage
+  const rule = await env.RULES_STORAGE.get(`rules/${rulePath}`);
+  
+  if (!rule) {
+    return new Response('Rule not found', { status: 404, headers: { 'Access-Control-Allow-Origin': '*' } });
+  }
+
+  return new Response(rule.body, {
+    headers: {
+      'Content-Type': 'text/markdown',
+      'Access-Control-Allow-Origin': '*',
+      'Cache-Control': 'public, max-age=3600'
+    }
+  });
 }
 
 /**

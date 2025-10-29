@@ -4,10 +4,12 @@
  * Reconfigure granular rules outside of initial setup
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, unlinkSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { createInterface } from 'readline';
+import { spawnSync } from 'child_process';
+import os from 'os';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -107,6 +109,64 @@ function parseArrayInput(input) {
 }
 
 /**
+ * Edit rule content using user's editor
+ * Opens a temporary file in the user's default editor
+ */
+async function editRuleContent(initialContent, ruleName) {
+  const tmpDir = os.tmpdir();
+  const tmpFile = join(tmpDir, `rule-edit-${Date.now()}-${ruleName.replace(/\//g, '-')}.mdc`);
+  
+  // Write initial content to temp file
+  writeFileSync(tmpFile, initialContent);
+  
+  // Determine editor (use $EDITOR, or common defaults)
+  const editor = process.env.EDITOR || process.env.VISUAL || (process.platform === 'win32' ? 'notepad' : 'nano');
+  
+  console.log(`  📝 Opening ${ruleName} in ${editor}...`);
+  console.log(`  💡 Save and close the editor to continue, or Ctrl+C to cancel`);
+  
+  // Open editor
+  const result = spawnSync(editor, [tmpFile], {
+    stdio: 'inherit',
+    shell: process.platform === 'win32'
+  });
+  
+  if (result.error) {
+    throw new Error(`Failed to open editor: ${result.error.message}`);
+  }
+  
+  if (result.signal === 'SIGINT' || result.status === 130) {
+    // User cancelled (Ctrl+C)
+    try {
+      if (existsSync(tmpFile)) {
+        unlinkSync(tmpFile);
+      }
+    } catch (err) {
+      // Ignore cleanup errors
+    }
+    return null;
+  }
+  
+  // Read edited content
+  if (!existsSync(tmpFile)) {
+    throw new Error('Temporary file was deleted during editing');
+  }
+  
+  const editedContent = readFileSync(tmpFile, 'utf8');
+  
+  // Clean up temp file
+  try {
+    if (existsSync(tmpFile)) {
+      unlinkSync(tmpFile);
+    }
+  } catch (err) {
+    // Ignore cleanup errors (file may be locked on Windows)
+  }
+  
+  return editedContent;
+}
+
+/**
  * Main function
  */
 async function main() {
@@ -187,29 +247,68 @@ async function main() {
             continue;
           }
           
+          let updatedBody = localBody;
+          
           if (actionLower === 'm' || actionLower === 'modify') {
-            // Modify rule properties
-            const newDesc = await question(rl, `  Description [${localMetadata.description || ''}]: `);
-            if (newDesc.trim()) {
-              localMetadata.description = newDesc.trim();
+            // Ask what to modify
+            const modifyType = await question(rl, `  Modify [M]etadata, [C]ontent, or [B]oth? [M]: `);
+            const modifyTypeLower = modifyType.trim().toLowerCase() || 'm';
+            
+            if (modifyTypeLower === 'c' || modifyTypeLower === 'content' || modifyTypeLower === 'b' || modifyTypeLower === 'both') {
+              // Edit rule content
+              try {
+                const editedBody = await editRuleContent(localBody, fileName);
+                if (editedBody !== null) {
+                  updatedBody = editedBody;
+                  console.log(`  ✅ Content modified`);
+                } else {
+                  console.log(`  ⏭️  Content editing cancelled`);
+                }
+              } catch (error) {
+                console.log(`  ⚠️  Failed to edit content: ${error.message}`);
+                const continueEdit = await question(rl, `  Continue with metadata editing? [Y/n]: `);
+                if (continueEdit.trim().toLowerCase() === 'n') {
+                  continue;
+                }
+              }
             }
             
-            const currentAlwaysApply = localMetadata.alwaysApply || false;
-            const newAlwaysApply = await question(rl, `  Always Apply [${currentAlwaysApply}] (true/false): `);
-            if (newAlwaysApply.trim()) {
-              localMetadata.alwaysApply = newAlwaysApply.trim().toLowerCase() === 'true';
-            }
-            
-            const currentGlobs = localMetadata.globs ? JSON.stringify(localMetadata.globs) : '[]';
-            const newGlobs = await question(rl, `  Globs [${currentGlobs}] (comma-separated patterns): `);
-            if (newGlobs.trim() !== '') {
-              const parsedGlobs = parseArrayInput(newGlobs);
-              localMetadata.globs = parsedGlobs.length > 0 ? parsedGlobs : undefined;
+            if (modifyTypeLower === 'm' || modifyTypeLower === 'metadata' || modifyTypeLower === 'b' || modifyTypeLower === 'both') {
+              // Modify rule properties
+              const newDesc = await question(rl, `  Description [${localMetadata.description || ''}]: `);
+              if (newDesc.trim()) {
+                localMetadata.description = newDesc.trim();
+              }
+              
+              const currentAlwaysApply = localMetadata.alwaysApply || false;
+              const newAlwaysApply = await question(rl, `  Always Apply [${currentAlwaysApply}] (true/false): `);
+              if (newAlwaysApply.trim()) {
+                localMetadata.alwaysApply = newAlwaysApply.trim().toLowerCase() === 'true';
+              }
+              
+              const currentGlobs = localMetadata.globs ? JSON.stringify(localMetadata.globs) : '[]';
+              const newGlobs = await question(rl, `  Globs [${currentGlobs}] (comma-separated patterns): `);
+              if (newGlobs.trim() !== '') {
+                const parsedGlobs = parseArrayInput(newGlobs);
+                localMetadata.globs = parsedGlobs.length > 0 ? parsedGlobs : undefined;
+              }
+              
+              // Allow modification of additional properties
+              const moreProps = await question(rl, `  Modify more properties? (name, type, category, etc.) [y/N]: `);
+              if (moreProps.trim().toLowerCase() === 'y') {
+                const propName = await question(rl, `  Property name: `);
+                const propValue = await question(rl, `  Property value: `);
+                if (propName.trim() && propValue.trim()) {
+                  localMetadata[propName.trim()] = propValue.trim();
+                }
+              }
+              
+              console.log(`  ✅ Metadata modified`);
             }
           }
           
           // Save the rule
-          const finalContent = generateFrontmatter(localMetadata) + localBody;
+          const finalContent = generateFrontmatter(localMetadata) + updatedBody;
           writeFileSync(rulePath, finalContent);
           console.log(`  ✅ Updated ${fileName}`);
         }
