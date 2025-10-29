@@ -1,0 +1,8 @@
+---
+description: CI/CD GitHub workflow and PR conventions
+globs: ["**/.github/**", "**/*.yml", "**/*.yaml"]
+alwaysApply: false
+---
+## GitHub Rules
+- Conventional Commits; PR template must answer schema/back-compat/timeouts/logging
+- Ensure CI checks: unit, integration, schema validation

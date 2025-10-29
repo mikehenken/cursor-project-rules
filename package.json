@@ -1,0 +1,45 @@
+{
+  "name": "rules-framework",
+  "version": "1.0.0",
+  "description": "Cursor Rules Framework - Deployable to Cloudflare Workers with MCP Integration",
+  "main": "framework/development/workers/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy --config framework/development/deployment/wrangler.toml",
+    "deploy:staging": "wrangler deploy --env staging",
+    "deploy:production": "wrangler deploy --env production",
+    "deploy:framework": "node framework/development/deployment/scripts/deploy-framework.js",
+    "pull:deployment": "node framework/development/scripts/pull-framework.js deployment",
+    "pull:rules": "node framework/development/scripts/pull-framework.js rules",
+    "pull:docs": "node framework/development/scripts/pull-framework.js docs",
+    "pull:all": "node framework/development/scripts/pull-framework.js all",
+    "setup": "node framework/development/scripts/setup-wizard.js",
+    "rules": "node framework/development/scripts/rules-cli.js",
+    "test:framework": "node framework/development/scripts/rules-cli.js test",
+    "mcp:server": "node framework/development/mcp-server.js",
+    "mcp:install": "npm install @modelcontextprotocol/sdk"
+  },
+  "dependencies": {
+    "@cloudflare/workers-types": "^4.20231218.0",
+    "@modelcontextprotocol/sdk": "^0.4.0"
+  },
+  "devDependencies": {
+    "wrangler": "^3.114.15"
+  },
+  "keywords": [
+    "cursor",
+    "rules",
+    "framework",
+    "cloudflare",
+    "workers",
+    "deployment",
+    "mcp",
+    "model-context-protocol"
+  ],
+  "author": "Rules Framework Team",
+  "license": "MIT",
+  "bin": {
+    "rules-framework-mcp": "./framework/development/mcp-server.js"
+  }
+}

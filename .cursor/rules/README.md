@@ -1,40 +1,112 @@
-# Project Rules
+# Rules Framework - Cursor Rules
 
-This directory contains organized Cursor rules that were migrated from the legacy `.cursorrules` file.
+This directory contains the Cursor rules used for **developing the Rules Framework itself**.
 
-## Rule Files
+## 🎯 Purpose
 
-### Always Applied Rules (alwaysApply: true)
-- **data-quality.mdc** - Data quality standards and verification protocols
-- **documentation.mdc** - Mandatory documentation organization structure
-- **testing.mdc** - Testing requirements and protocols  
-- **code-hygiene.mdc** - Code hygiene and project organization
-- **engineering-practices.mdc** - Core engineering guardrails
-- **workflow.mdc** - Task-driven development workflow
-- **repo-creation.mdc** - Repository creation approval requirements
+These rules are applied to the Rules Framework development to ensure:
+- Consistent code quality
+- Proper documentation standards
+- Effective testing practices
+- Clean architecture patterns
 
-### Context-Specific Rules (alwaysApply: false)
-- **api-guidelines.mdc** - API and FastAPI guidelines (auto-attached for Python files)
-- **github.mdc** - GitHub workflow conventions (auto-attached for GitHub files)
+## 🏗️ Why .cursor/rules/ Instead of .cursorrules
 
-## How Rules Work
+### **Consistency with Our Framework**
+- We promote `.cursor/rules/` with purpose-scoped organization to external projects
+- We should practice what we preach
+- Maintains consistency across all projects using our framework
 
-1. **Always Applied**: Rules with `alwaysApply: true` are included in every AI context
-2. **Auto-Attached**: Rules with `globs` patterns are included when matching files are referenced
-3. **Manual**: Rules can be manually invoked using `@ruleName` in chat
+### **Better Organization**
+- **Modular**: Each rule category in its own file
+- **Maintainable**: Easy to update specific rule categories
+- **Scalable**: Easy to add new rule categories
+- **Clear**: Each file has a specific purpose
 
-## Usage Tips
+### **Framework Alignment**
+- Matches our `framework/external/rules/` structure
+- Consistent with our MCP integration approach
+- Aligns with our purpose-scoped philosophy
 
-- Rules are automatically loaded based on their configuration
-- Check active rules in the Agent sidebar during chat
-- To temporarily disable a rule, you can toggle it in Cursor Settings → Rules
-- For file-specific guidance, ensure you're working with files that match the glob patterns
+## 📁 Rule Categories
 
-## Migration Note
+### Core Rules (`core/`)
+- **Code Hygiene**: Clean code practices, file organization
+- **Engineering Practices**: Architecture patterns, best practices
+- **Workflow**: Development workflow and processes
+- **Repository Creation**: Guidelines for creating repositories
 
-These rules were migrated from the legacy `.cursorrules` file to take advantage of:
-- Better organization and modularity
-- Context-aware rule application
-- Version control for individual rule sets
-- Easier maintenance and updates
+### Backend Rules (`backend/`)
+- **API Guidelines**: FastAPI and backend API standards
+- **Database Practices**: Data modeling and management
+- **Security**: Authentication and authorization patterns
 
+### Documentation Rules (`docs/`)
+- **Documentation Standards**: Writing and formatting guidelines
+- **Data Quality**: Accuracy and completeness requirements
+- **Structure**: Organization and navigation patterns
+
+### Testing Rules (`testing/`)
+- **Testing Requirements**: Mandatory testing protocols
+- **Test Organization**: Structure and naming conventions
+- **Quality Assurance**: Validation and verification standards
+
+### CI/CD Rules (`ci-cd/`)
+- **GitHub Workflows**: Automated testing and deployment
+- **Release Management**: Versioning and publishing
+- **Quality Gates**: Automated quality checks
+
+### Deployment Rules (`deployment/`)
+- **Cloudflare Workers**: Serverless deployment patterns
+- **Environment Management**: Configuration and secrets
+- **Monitoring**: Logging and observability
+
+## 🔧 Usage
+
+These rules are automatically applied when working on the Rules Framework:
+
+1. **Code Quality**: Enforced through linting and formatting
+2. **Documentation**: Required for all new features
+3. **Testing**: Mandatory for all functionality
+4. **Architecture**: Guided by engineering practices
+
+## 📚 External vs Framework Rules
+
+### Framework Rules (This Directory)
+- Used for **developing the Rules Framework itself**
+- Applied to framework code, documentation, and processes
+- Focused on framework development best practices
+
+### External Rules (`framework/external/rules/`)
+- Used by **external projects** that pull in the framework
+- Applied to user projects via MCP integration
+- Focused on general development best practices
+
+## 🚀 Benefits
+
+### For Framework Development
+- **Consistent Quality**: All framework code follows the same standards
+- **Better Documentation**: Clear guidelines for framework docs
+- **Effective Testing**: Comprehensive testing requirements
+- **Clean Architecture**: Well-structured framework code
+
+### For External Projects
+- **Proven Patterns**: Rules based on framework development experience
+- **Best Practices**: Guidelines refined through framework development
+- **Quality Assurance**: Standards that ensure project success
+
+## 🔄 Maintenance
+
+### Updating Framework Rules
+1. Modify rules in this directory
+2. Test with framework development
+3. Deploy updated rules to external projects via MCP
+
+### Syncing with External Rules
+- Framework rules inform external rules
+- External rules are derived from framework experience
+- Both evolve together to maintain consistency
+
+---
+
+**These rules ensure the Rules Framework itself maintains the highest quality standards!** 🎯

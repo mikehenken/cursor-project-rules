@@ -1,0 +1,31 @@
+---
+name: engineering-practices
+description: Core engineering guardrails and coding standards
+alwaysApply: true
+---
+## Engineering Guardrails
+- Prefer clarity over cleverness; small, composable modules
+- No shared mutable state across services; communicate over HTTP
+- Strict typing with Pydantic models; validate inputs/outputs at service boundaries
+- Fail fast at boundaries, return structured error payloads; never swallow exceptions
+- Use correlation/request IDs across hops; propagate X-Request-ID
+
+## Execution Sequence
+- SEARCH FIRST: explore codebase/schemas to confirm prior art before implementing
+- REUSE FIRST: extend existing functions/patterns; prefer smallest viable edits
+- NO ASSUMPTIONS: rely only on code, schemas, and approved instructions; ask when missing
+- CHALLENGE IDEAS: call out flaws/risks; propose better approaches directly
+- BE HONEST: state blockers or gaps; do not overpromise
+
+## Coding Standards
+- Plan before coding; explain reasoning for complex suggestions in PRs
+- Write self-explanatory code; comments only for non-obvious rationale and invariants
+- Keep imports alphabetically sorted
+- Keep files under ~300 lines (where it makes sense) which is where code clarity improves; split when it helps
+- Keep infra costs low; default to cost-effective choices. Cloudflare workers/pages are always preferred
+- Use regression testing for all frontend functionality and tests leveraging playwright
+- Test suites should be run locally and on CI
+- Run linters/formatters (ruff/black/isort) and mypy strict for public modules
+
+## Review Checklist
+- Interfaces match schemas; errors structured; timeouts sane; logs structured; no secrets; tests present

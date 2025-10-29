@@ -1,0 +1,49 @@
+---
+description: Backend API implementation and FastAPI specific guidelines
+globs: ["**/*.py", "**/api/**", "**/routers/**", "**/services/**"]
+alwaysApply: false
+---
+## General API Guidelines: 
+### API Implementations:
+- Use FastAPI, httpx.AsyncClient with timeouts and retries
+- Enforce JSON schemas for requests and responses
+- Background work: FastAPI BackgroundTasks or simple queue later
+
+### API Monitoring:
+- GET /health on every service (readiness/liveness)
+- Structured logs to stdout: JSON lines with request_id, latency_ms, status
+
+### API Security:
+- API keys or JWT between core and plugins (env-configured)
+- Never log sensitive data; redact email, phone, api_key
+- Secrets via env/SSM
+
+### Python Style:
+- Python 3.11+, ruff/black/isort; mypy strict for public modules
+
+## FastAPI Guidelines:
+### Principles:
+- Write concise, technical code with accurate Python examples
+- Prefer functional, declarative style; avoid classes when not needed
+- Use descriptive variable names with auxiliary verbs (e.g., is_active, has_permission)
+- Use lowercase_with_underscores for files/dirs (e.g., routers/user_routes.py)
+- Use RORO (Receive an Object, Return an Object) pattern for function IO
+
+### Python FastAPI:
+- Use def for pure CPU-bound functions, async def for I/O-bound operations
+- Add type hints to all function signatures; validate with Pydantic v2 models
+- Structure files: exported router, sub-routes, utilities, static content, types (models, schemas)
+- Prefer lifespan context managers over startup/shutdown events
+- Use middleware for logging, error monitoring, performance
+- Use HTTPException for expected errors; central middleware for unexpected errors
+- Optimize with async operations for external calls and DB access
+
+### Error Handling:
+- Handle edge cases first with guard clauses; return early
+- Place the happy path last for readability; avoid deep nesting/else when possible
+- Consistent structured error payloads: { code, message, details, request_id }
+
+### Performance:
+- Avoid blocking I/O in routes; use async HTTP clients and DB drivers
+- Cache static/frequently accessed data (in-memory/Redis) when needed
+- Keep route handlers small; push heavy logic to services/utilities

@@ -1,0 +1,30 @@
+name = "rules-framework"
+main = "workers/index-simple.js"
+compatibility_date = "2024-01-01"
+compatibility_flags = ["nodejs_compat"]
+account_id = "dd84ae290b8a011725410e223c0ea928"
+
+[env.production]
+name = "rules-framework"
+route = "rules-framework.your-domain.com/*"
+
+[env.staging]
+name = "rules-framework-staging"
+route = "staging-rules-framework.your-domain.com/*"
+
+# Environment variables
+[vars]
+FRAMEWORK_VERSION = "1.0.0"
+DEPLOYMENT_TYPE = "cloudflare-workers"
+
+# KV Namespace for caching (commented out for initial deployment)
+# [[kv_namespaces]]
+# binding = "RULES_CACHE"
+# id = "2411d0f8-f1ac-4e81-8628-452cfbf7419a"
+# preview_id = "your-preview-kv-namespace-id"
+
+# R2 Bucket for file storage (will be created during deployment)
+# [[r2_buckets]]
+# binding = "RULES_STORAGE"
+# bucket_name = "rules-framework-files"
+# preview_bucket_name = "rules-framework-files-preview"

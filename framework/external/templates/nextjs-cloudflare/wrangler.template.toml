@@ -1,0 +1,43 @@
+# Cloudflare Wrangler Configuration Template
+# Copy this file to wrangler.toml and customize for your project
+
+name = "your-project-name"
+compatibility_date = "2023-10-17"
+
+# Environment-specific configurations
+[env.production]
+name = "your-project-name-production"
+
+# Optional: Custom domain configuration
+# [[env.production.routes]]
+# pattern = "your-app.your-domain.com"
+# zone_name = "your-domain.com"
+
+[env.staging]
+name = "your-project-name-staging"
+
+# Optional: Custom domain for staging
+# [[env.staging.routes]]
+# pattern = "staging-your-app.your-domain.com"
+# zone_name = "your-domain.com"
+
+[env.development]
+name = "your-project-name-development"
+
+# Optional: Custom domain for development
+# [[env.development.routes]]
+# pattern = "dev-your-app.your-domain.com"
+# zone_name = "your-domain.com"
+
+# Optional: Environment variables for Cloudflare Pages
+# [env.production.vars]
+# ENVIRONMENT = "production"
+# API_URL = "https://api.yourdomain.com"
+
+# [env.staging.vars]
+# ENVIRONMENT = "staging"
+# API_URL = "https://staging-api.yourdomain.com"
+
+# [env.development.vars]
+# ENVIRONMENT = "development"
+# API_URL = "https://dev-api.yourdomain.com"

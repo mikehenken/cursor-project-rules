@@ -1,0 +1,89 @@
+# Framework Development Rules
+
+## Project Architecture Clarity
+
+### Framework vs External Files
+- **Framework Development**: Files in `framework/development/` are for developing the Rules Framework itself
+- **External Project Files**: Files in `framework/external/` are pulled into external Cursor projects
+- **Clear Separation**: Always maintain clear distinction between these two purposes
+
+### File Organization
+- Keep framework development files in `framework/development/`
+- Keep external project files in `framework/external/`
+- Use symlinks in root for easy access during development
+- Update all references when moving files between categories
+
+## Documentation Standards
+
+### Framework Documentation
+- Document framework development processes in `framework/development/docs/`
+- Document external project usage in `framework/external/docs/`
+- Always clarify whether documentation is for framework developers or external users
+- Include clear usage patterns and examples
+
+### Architecture Documentation
+- Maintain `FRAMEWORK_ARCHITECTURE.md` for technical architecture
+- Maintain `FRAMEWORK_VS_EXTERNAL.md` for file classification
+- Update README.md to reflect current structure
+- Document data flow between framework and external projects
+
+## Code Quality
+
+### Framework Development
+- Follow all core engineering practices
+- Maintain high code quality standards
+- Use comprehensive testing for all framework features
+- Document all public APIs and interfaces
+
+### External Project Integration
+- Ensure external files are self-contained
+- Provide clear setup instructions
+- Include comprehensive error handling
+- Maintain backward compatibility
+
+## Deployment and Distribution
+
+### Framework Deployment
+- Deploy framework to Cloudflare Workers
+- Ensure API endpoints are reliable and fast
+- Monitor framework performance and usage
+- Update external projects via MCP integration
+
+### External Project Setup
+- Provide one-line setup commands
+- Ensure setup process is user-friendly
+- Include comprehensive error messages
+- Support both automated and manual setup
+
+## Maintenance
+
+### Regular Updates
+- Keep framework development files current
+- Update external project files based on user feedback
+- Maintain clear versioning and changelog
+- Test both framework and external integration
+
+### Quality Assurance
+- Test framework deployment regularly
+- Validate external project setup process
+- Monitor MCP integration functionality
+- Ensure documentation accuracy
+
+## Best Practices
+
+### Development Workflow
+1. Develop framework features in `framework/development/`
+2. Test framework functionality thoroughly
+3. Deploy framework to Cloudflare Workers
+4. Update external project files via MCP
+5. Document changes and usage patterns
+
+### User Experience
+- Make external project setup as simple as possible
+- Provide clear error messages and troubleshooting
+- Maintain comprehensive documentation
+- Ensure MCP integration is seamless
+
+---
+
+**These rules ensure the Rules Framework maintains clear architecture and excellent user experience!** 🎯

@@ -1,0 +1,45 @@
+---
+name: repo-creation
+description: Repository creation and script generation approval requirements
+alwaysApply: true
+---
+## Repository Creation Rules
+
+### Mandatory User Approval
+- **NEVER** create GitHub repositories without explicit user confirmation
+- **ALWAYS** ask: "Should I create a GitHub repository for this project?" before:
+  - Creating any repository creation scripts
+  - Implementing any application logic that creates repositories
+  - Running any commands that create repositories
+
+### Repository Creation Protocol
+1. **Initial Check**: When a repository creation task is mentioned:
+   - Pause and ask for explicit confirmation
+   - Present the proposed repository details (name, visibility, owner)
+   - Wait for user approval before proceeding
+
+2. **Script Creation**: If approved:
+   - Use the reusable `scripts/create-github-repo.sh` script
+   - Confirm repository settings before execution
+   - Provide clear feedback on creation status
+
+3. **Safety Measures**:
+   - Default to private repositories unless explicitly requested otherwise
+   - Always display repository URL after successful creation
+   - Handle existing repository names gracefully
+
+### Example Interaction
+```
+User: "Create a GitHub repo for this project"
+AI: "Should I create a GitHub repository for this project? I'll need:
+- Repository name: [suggested-name]
+- Owner/Organization: [owner]
+- Visibility: Private (default)
+
+Would you like me to proceed with creating this repository?"
+```
+
+### Script Usage
+- The project includes a reusable script at `scripts/create-github-repo.sh`
+- Use `-y` flag for automated workflows after initial approval
+- Script supports templates, descriptions, and remote configuration

@@ -1,0 +1,35 @@
+Expand this tool and cli quick setup to ask the user if they want each additional functionality. For example:
+- nextjs frontend
+- fastapi python
+- auto github repo creation
+- cloudflare deployment
+- rules 
+- individual rule granularity
+
+### Defaults
+The default is all of the above enabled with the exception of rule granularity (all rules included by default)
+
+### Auto github repo
+ If they decide on auto github repo creation, they need to specify a project name or it will use current directory name. Always default to private repo but feel free to ask them.
+
+### Cloudflare deployment
+1. If they opt-in for cloudflare deployment prompt them for the env secret values for Cloudflare
+2. Ask whether they want Cloudflare Workers deployment or Cloudflare Pages
+
+### Rule Granularity
+If they choose yes for Rule Granularity, Cycle through all available rules and give them the option to:
+- include with their project
+- modify the alwaysApply value
+- modify the globs if desired
+- Modify Agent Requested value
+- Modify Auto-Attach value
+- Modify Description
+- Modify Name 
+- Modiy Rule Type
+- Modify Rule Category
+- Modify Rule Subcategory
+- Modify Rule Subsubcategory
+- exclude from their project
+- exclude from their project and all projects
+
+
