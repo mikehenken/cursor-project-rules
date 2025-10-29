@@ -118,7 +118,7 @@ async function uploadDeploymentFiles() {
  */
 async function uploadRulesFiles() {
   for (const dirName of config.rulesDirectories) {
-    const rulesDir = join(projectRoot, '.cursor', 'rules', dirName, '.cursor', 'rules');
+    const rulesDir = join(projectRoot, '.cursor', 'rules', dirName);
     
     if (dirExists(rulesDir)) {
       console.log(`   📁 Uploading rules from ${dirName}/...`);
