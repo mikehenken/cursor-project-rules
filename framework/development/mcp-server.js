@@ -271,25 +271,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     switch (name) {
       case 'list_rules':
-        return await listRules(args);
+        return await listRules(args || {});
       case 'get_rule':
-        return await getRule(args);
+        return await getRule(args || {});
       case 'enable_rules':
-        return await enableRules(args);
+        return await enableRules(args || {});
       case 'list_templates':
-        return await listTemplates(args);
+        return await listTemplates(args || {});
       case 'get_template':
-        return await getTemplate(args);
+        return await getTemplate(args || {});
       case 'apply_template':
-        return await applyTemplate(args);
+        return await applyTemplate(args || {});
       case 'configure_environment':
-        return await configureEnvironment(args);
+        return await configureEnvironment(args || {});
       case 'deploy_project':
-        return await deployProject(args);
+        return await deployProject(args || {});
       case 'pull_from_framework':
-        return await pullFromFramework(args);
+        return await pullFromFramework(args || {});
       case 'validate_setup':
-        return await validateSetup(args);
+        return await validateSetup(args || {});
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
@@ -298,7 +298,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       content: [
         {
           type: 'text',
-          text: `Error: ${error.message}`
+          text: JSON.stringify({ error: error.message, tool: name }, null, 2)
         }
       ],
       isError: true
@@ -307,33 +307,61 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 /**
+ * Fetch rules from API
+ */
+async function fetchRulesFromAPI() {
+  try {
+    const response = await fetch(`${config.frameworkUrl}/api/rules`);
+    if (!response.ok) {
+      throw new Error(`API request failed: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    throw new Error(`Failed to fetch rules from API: ${error.message}`);
+  }
+}
+
+/**
  * List available rules
  */
 async function listRules(args) {
-  const { purpose } = args;
-  const rules = [];
-
-  if (purpose) {
-    const purposeDir = join(config.rulesDir, purpose);
-    if (existsSync(purposeDir)) {
-      const files = readdirSync(purposeDir).filter(f => f.endsWith('.mdc'));
-      rules.push({
-        purpose,
-        files: files.map(f => ({
-          name: f,
-          path: join(purposeDir, f),
-          description: getRuleDescription(f)
-        }))
-      });
+  const { purpose } = args || {};
+  
+  // Try to fetch from API first
+  try {
+    const apiRules = await fetchRulesFromAPI();
+    
+    // Filter by purpose if specified
+    if (purpose) {
+      const filtered = apiRules.filter(r => r.name === purpose);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(filtered, null, 2)
+          }
+        ]
+      };
     }
-  } else {
-    const purposes = ['core', 'backend', 'docs', 'testing', 'ci-cd'];
-    for (const p of purposes) {
-      const purposeDir = join(config.rulesDir, p);
+    
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(apiRules, null, 2)
+        }
+      ]
+    };
+  } catch (error) {
+    // Fallback to local files if API fails
+    const rules = [];
+
+    if (purpose) {
+      const purposeDir = join(config.rulesDir, purpose);
       if (existsSync(purposeDir)) {
         const files = readdirSync(purposeDir).filter(f => f.endsWith('.mdc'));
         rules.push({
-          purpose: p,
+          purpose,
           files: files.map(f => ({
             name: f,
             path: join(purposeDir, f),
@@ -341,47 +369,90 @@ async function listRules(args) {
           }))
         });
       }
-    }
-  }
-
-  return {
-    content: [
-      {
-        type: 'text',
-        text: JSON.stringify(rules, null, 2)
+    } else {
+      const purposes = ['core', 'backend', 'docs', 'testing', 'ci-cd'];
+      for (const p of purposes) {
+        const purposeDir = join(config.rulesDir, p);
+        if (existsSync(purposeDir)) {
+          const files = readdirSync(purposeDir).filter(f => f.endsWith('.mdc'));
+          rules.push({
+            purpose: p,
+            files: files.map(f => ({
+              name: f,
+              path: join(purposeDir, f),
+              description: getRuleDescription(f)
+            }))
+          });
+        }
       }
-    ]
-  };
+    }
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(rules, null, 2)
+        }
+      ]
+    };
+  }
 }
 
 /**
  * Get a specific rule
  */
 async function getRule(args) {
-  const { purpose, ruleName } = args;
+  const { purpose, ruleName } = args || {};
+  
+  if (!purpose || !ruleName) {
+    throw new Error('Missing required parameters: purpose and ruleName are required');
+  }
+  
   const rulePath = join(config.rulesDir, purpose, ruleName);
   
-  if (!existsSync(rulePath)) {
-    throw new Error(`Rule not found: ${purpose}/${ruleName}`);
+  // Try local file first
+  if (existsSync(rulePath)) {
+    const content = readFileSync(rulePath, 'utf8');
+    return {
+      content: [
+        {
+          type: 'text',
+          text: content
+        }
+      ]
+    };
   }
-
-  const content = readFileSync(rulePath, 'utf8');
   
-  return {
-    content: [
-      {
-        type: 'text',
-        text: content
-      }
-    ]
-  };
+  // Fallback to API
+  try {
+    const response = await fetch(`${config.frameworkUrl}/rules/${purpose}/${ruleName}`);
+    if (!response.ok) {
+      throw new Error(`Rule not found: ${purpose}/${ruleName}`);
+    }
+    const content = await response.text();
+    return {
+      content: [
+        {
+          type: 'text',
+          text: content
+        }
+      ]
+    };
+  } catch (error) {
+    throw new Error(`Rule not found: ${purpose}/${ruleName}. ${error.message}`);
+  }
 }
 
 /**
  * Enable rules in a project
  */
 async function enableRules(args) {
-  const { purposes, projectPath = process.cwd() } = args;
+  const { purposes, projectPath = process.cwd() } = args || {};
+  
+  if (!purposes || !Array.isArray(purposes) || purposes.length === 0) {
+    throw new Error('Missing required parameter: purposes must be a non-empty array');
+  }
+  
   const results = [];
 
   for (const purpose of purposes) {
@@ -389,13 +460,24 @@ async function enableRules(args) {
     const targetDir = join(projectPath, '.cursor', 'rules', purpose);
     
     if (existsSync(sourceDir)) {
+      // Ensure target directory exists
+      mkdirSync(join(projectPath, '.cursor', 'rules'), { recursive: true });
+      
       // Copy the entire purpose directory
-      execSync(`cp -r "${sourceDir}" "${targetDir}"`, { stdio: 'pipe' });
-      results.push({
-        purpose,
-        status: 'enabled',
-        path: targetDir
-      });
+      try {
+        execSync(`cp -r "${sourceDir}" "${targetDir}"`, { stdio: 'pipe' });
+        results.push({
+          purpose,
+          status: 'enabled',
+          path: targetDir
+        });
+      } catch (error) {
+        results.push({
+          purpose,
+          status: 'error',
+          error: error.message
+        });
+      }
     } else {
       results.push({
         purpose,

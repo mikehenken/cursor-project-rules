@@ -22,11 +22,11 @@
     "mcp:install": "npm install @modelcontextprotocol/sdk"
   },
   "dependencies": {
-    "@cloudflare/workers-types": "^4.20231218.0",
-    "@modelcontextprotocol/sdk": "^0.4.0"
+    "@cloudflare/workers-types": "^4.20251014.0",
+    "@modelcontextprotocol/sdk": "^1.20.2"
   },
   "devDependencies": {
-    "wrangler": "^4.45.1"
+    "wrangler": "^4.45.2"
   },
   "keywords": [
     "cursor",

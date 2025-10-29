@@ -530,6 +530,13 @@ async function downloadAndInstallRules() {
           }
 
           const content = await ruleResponse.text();
+          
+          // Validate content - ensure it's actual rule content, not API documentation
+          if (!content.trim() || content.includes('Rules Framework API') || !content.includes('---')) {
+            console.log(`  ⚠️  Invalid content for ${purpose}/${fileName}, skipping...`);
+            continue;
+          }
+          
           const filePath = join(purposeDir, fileName);
           fs.writeFileSync(filePath, content);
           console.log(`  ✅ Installed ${purpose}/${fileName}`);
@@ -698,6 +705,13 @@ async function handleGranularRules() {
           }
 
           const content = await ruleResponse.text();
+          
+          // Validate content - ensure it's actual rule content, not API documentation
+          if (!content.trim() || content.includes('Rules Framework API') || !content.includes('---')) {
+            console.log(`  ⚠️  Invalid content for ${purpose}/${fileName}, skipping...`);
+            continue;
+          }
+          
           let { metadata, body } = parseFrontmatter(content);
           
           console.log(`\n  📄 Rule: ${fileName}`);

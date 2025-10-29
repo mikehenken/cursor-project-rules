@@ -206,14 +206,23 @@ async function uploadDeploymentFiles() {
  * Upload rules files to R2
  */
 async function uploadRulesFiles() {
+  // Read from framework/external/rules (source of truth)
+  const externalRulesDir = join(repoRoot, 'framework', 'external', 'rules');
+  
+  if (!dirExists(externalRulesDir)) {
+    console.log(`   ⚠️  External rules directory not found: ${externalRulesDir}`);
+    return;
+  }
+
   for (const dirName of config.rulesDirectories) {
-    const rulesDir = join(repoRoot, '.cursor', 'rules', dirName);
+    const rulesDir = join(externalRulesDir, dirName);
     
     if (dirExists(rulesDir)) {
       console.log(`   📁 Uploading rules from ${dirName}/...`);
       const files = readdirSync(rulesDir);
       
       for (const fileName of files) {
+        // Only upload .mdc files, skip README and other documentation files
         if (fileName.endsWith('.mdc')) {
           const filePath = join(rulesDir, fileName);
           const r2Key = `rules/${dirName}/${fileName}`;

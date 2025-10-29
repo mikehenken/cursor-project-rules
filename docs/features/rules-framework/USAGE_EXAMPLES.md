@@ -335,3 +335,4 @@ mcpServer.stdin.write(JSON.stringify({
 - See [Purpose-Scoped Rules Guide](../guides/PURPOSE_SCOPED_RULES.md) for rule organization
 - See [Troubleshooting Guide](../guides/TROUBLESHOOTING.md) for common issues
 
+

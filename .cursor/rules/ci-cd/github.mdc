@@ -2,7 +2,7 @@
 name: github
 description: CI/CD GitHub workflow and PR conventions
 globs: ["**/.github/**", "**/*.yml", "**/*.yaml"]
-alwaysApply: false
+alwaysApply: true
 ---
 ## GitHub Rules
 - Conventional Commits; PR template must answer schema/back-compat/timeouts/logging

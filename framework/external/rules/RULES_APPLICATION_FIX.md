@@ -59,14 +59,14 @@ The `.cursor/rules/` structure had a **nested directory issue** that prevented C
 │   ├── engineering-practices.mdc # alwaysApply: true
 │   └── repo-creation.mdc         # alwaysApply: true
 ├── backend/                       # Backend/API rules
-│   └── api-guidelines.mdc        # globs: ["**/*.py", "**/api/**"]
+│   └── api-guidelines.mdc        # alwaysApply: true, globs: ["**/*.py", "**/api/**"]
 ├── docs/                          # Documentation rules
 │   ├── data-quality.mdc          # alwaysApply: true
 │   └── documentation.mdc         # globs: ["**/*.md", "**/docs/**"]
 ├── testing/                       # Testing rules
 │   └── testing.mdc               # globs: ["**/tests/**", "**/*.test.*"]
 ├── ci-cd/                         # CI/CD rules
-│   └── github.mdc                # globs: ["**/.github/**", "**/*.yml"]
+│   └── github.mdc                # alwaysApply: true, globs: ["**/.github/**", "**/*.yml"]
 └── framework-development.mdc      # Framework-specific rules
 ```
 
@@ -74,14 +74,16 @@ The `.cursor/rules/` structure had a **nested directory issue** that prevented C
 
 ### **Always Applied Rules**
 - **Core Rules**: `workflow.mdc`, `code-hygiene.mdc`, `engineering-practices.mdc`, `repo-creation.mdc`
+- **Backend Rules**: `api-guidelines.mdc` (always applied, also has globs)
+- **CI/CD Rules**: `github.mdc` (always applied, also has globs)
 - **Data Quality**: `data-quality.mdc`
 - **Framework Development**: `framework-development.mdc`
 
 ### **Glob-Based Rules**
-- **Backend**: Applied to Python files and API directories
+- **Backend**: Applied to Python files and API directories (also always applied)
 - **Documentation**: Applied to Markdown files and docs directories
 - **Testing**: Applied to test files and test directories
-- **CI/CD**: Applied to GitHub workflows and YAML files
+- **CI/CD**: Applied to GitHub workflows and YAML files (also always applied)
 
 ## 🚀 **Benefits of the Fix**
 
@@ -120,8 +122,8 @@ The `.cursor/rules/` structure had a **nested directory issue** that prevented C
 - **Use** consistent naming conventions
 
 ### **Rule Configuration**
-- **Set** `alwaysApply: true` for core rules
-- **Use** `globs` for file-specific rules
+- **Set** `alwaysApply: true` for core rules, backend rules, and CI/CD rules
+- **Use** `globs` for file-specific rules (can be combined with `alwaysApply: true`)
 - **Include** proper `description` in frontmatter
 
 ### **Testing**

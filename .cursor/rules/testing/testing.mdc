@@ -1,7 +1,6 @@
 ---
 name: testing
 description: Testing requirements and protocols
-globs: ["**/tests/**", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"]
 alwaysApply: true
 ---
 ## Testing Requirements - MANDATORY

@@ -128,8 +128,9 @@ async function pullRulesFiles() {
     ensureDirectoryExists(rulesDir);
 
     // Save rules files by purpose
+    // Correct structure: rules/purpose/file.mdc (NOT rules/purpose/.cursor/rules/file.mdc)
     for (const [purpose, files] of Object.entries(data.structure)) {
-      const purposeDir = join(rulesDir, purpose, '.cursor', 'rules');
+      const purposeDir = join(rulesDir, purpose);
       ensureDirectoryExists(purposeDir);
 
       for (const [fileName, content] of Object.entries(files)) {

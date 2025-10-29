@@ -66,3 +66,4 @@ for (const file of criticalFiles) {
 
 console.log('\n✅ Done!');
 
+

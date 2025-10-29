@@ -133,10 +133,53 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 /**
+ * Fetch rules from API
+ */
+async function fetchRulesFromAPI() {
+  try {
+    const response = await fetch(`${config.frameworkUrl}/api/rules`);
+    if (!response.ok) {
+      throw new Error(`API request failed: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    throw new Error(`Failed to fetch rules from API: ${error.message}`);
+  }
+}
+
+/**
  * List available rules
  */
 async function listRules(args) {
   const { purpose } = args || {};
+  
+  // Try to fetch from API first
+  try {
+    const apiRules = await fetchRulesFromAPI();
+    
+    // Filter by purpose if specified
+    if (purpose) {
+      const filtered = apiRules.filter(r => r.name === purpose);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(filtered, null, 2)
+          }
+        ]
+      };
+    }
+    
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(apiRules, null, 2)
+        }
+      ]
+    };
+  } catch (error) {
+    // Fallback to local files if API fails
   const rules = [];
 
   if (purpose) {
@@ -178,6 +221,7 @@ async function listRules(args) {
       }
     ]
   };
+  }
 }
 
 /**
@@ -210,12 +254,9 @@ async function getRule(args) {
   
   const rulePath = join(config.rulesDir, purpose, ruleName);
   
-  if (!existsSync(rulePath)) {
-    throw new Error(`Rule not found: ${purpose}/${ruleName}`);
-  }
-
+  // Try local file first
+  if (existsSync(rulePath)) {
   const content = readFileSync(rulePath, 'utf8');
-  
   return {
     content: [
       {
@@ -224,6 +265,26 @@ async function getRule(args) {
       }
     ]
   };
+  }
+  
+  // Fallback to API
+  try {
+    const response = await fetch(`${config.frameworkUrl}/rules/${purpose}/${ruleName}`);
+    if (!response.ok) {
+      throw new Error(`Rule not found: ${purpose}/${ruleName}`);
+    }
+    const content = await response.text();
+    return {
+      content: [
+        {
+          type: 'text',
+          text: content
+        }
+      ]
+    };
+  } catch (error) {
+    throw new Error(`Rule not found: ${purpose}/${ruleName}. ${error.message}`);
+  }
 }
 
 /**

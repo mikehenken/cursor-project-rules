@@ -1,7 +1,7 @@
 ---
 description: Backend API implementation and FastAPI specific guidelines
-globs: ["**/*.py", "**/api/**", "**/routers/**", "**/services/**"]
-alwaysApply: false
+globs: ["**/*.py", "**/api/**", "**/backend/**", "**/routers/**", "**/services/**"]
+alwaysApply: true
 ---
 ## General API Guidelines: 
 ### API Implementations:
