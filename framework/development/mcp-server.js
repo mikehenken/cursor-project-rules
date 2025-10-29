@@ -8,10 +8,11 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
+import { createInterface } from 'readline';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -257,6 +258,94 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             }
           }
         }
+      },
+      {
+        name: 'reconfigure_rules',
+        description: 'Reconfigure granular rules for the current project (outside of initial setup)',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            projectPath: {
+              type: 'string',
+              description: 'Path to the target project (defaults to current directory)'
+            },
+            purpose: {
+              type: 'string',
+              description: 'Specific purpose to reconfigure (optional, will prompt for all if not provided)',
+              enum: ['core', 'backend', 'docs', 'testing', 'ci-cd']
+            }
+          }
+        }
+      },
+      {
+        name: 'sync_rules',
+        description: 'Sync rules from server with conflict detection',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            projectPath: {
+              type: 'string',
+              description: 'Path to the target project (defaults to current directory)'
+            },
+            frameworkUrl: {
+              type: 'string',
+              description: 'URL of the deployed framework'
+            },
+            autoResolve: {
+              type: 'string',
+              description: 'How to resolve conflicts automatically',
+              enum: ['server', 'local', 'none']
+            }
+          }
+        }
+      },
+      {
+        name: 'push_rules_to_git',
+        description: 'Push new/modified rules to git repository if user has appropriate access',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            projectPath: {
+              type: 'string',
+              description: 'Path to the target project (defaults to current directory)'
+            },
+            commitMessage: {
+              type: 'string',
+              description: 'Custom commit message (optional)'
+            },
+            branch: {
+              type: 'string',
+              description: 'Git branch to push to (defaults to current branch)'
+            },
+            remote: {
+              type: 'string',
+              description: 'Git remote name (defaults to origin)'
+            }
+          }
+        }
+      },
+      {
+        name: 'search_rules',
+        description: 'Search for rules by keyword, purpose, or content',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'Search query (searches in rule names, descriptions, and content)'
+            },
+            purpose: {
+              type: 'string',
+              description: 'Filter by specific purpose',
+              enum: ['core', 'backend', 'docs', 'testing', 'ci-cd']
+            },
+            searchContent: {
+              type: 'boolean',
+              description: 'Whether to search in rule content (default: true)'
+            }
+          },
+          required: ['query']
+        }
       }
     ]
   };
@@ -290,6 +379,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return await pullFromFramework(args || {});
       case 'validate_setup':
         return await validateSetup(args || {});
+      case 'reconfigure_rules':
+        return await reconfigureRules(args || {});
+      case 'sync_rules':
+        return await syncRules(args || {});
+      case 'push_rules_to_git':
+        return await pushRulesToGit(args || {});
+      case 'search_rules':
+        return await searchRules(args || {});
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
@@ -790,6 +887,529 @@ function getTemplateDescription(templateName) {
     'env.example': 'Environment variables template'
   };
   return descriptions[templateName] || 'Template description not available';
+}
+
+/**
+ * Parse YAML frontmatter from rule file content
+ */
+function parseFrontmatter(content) {
+  const frontmatterRegex = /^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/;
+  const match = content.match(frontmatterRegex);
+  
+  if (!match) {
+    return { metadata: {}, body: content };
+  }
+  
+  const yamlContent = match[1];
+  const body = match[2];
+  const metadata = {};
+  
+  // Simple YAML parser for basic key-value pairs
+  const lines = yamlContent.split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    
+    const colonIndex = trimmed.indexOf(':');
+    if (colonIndex === -1) continue;
+    
+    const key = trimmed.substring(0, colonIndex).trim();
+    let value = trimmed.substring(colonIndex + 1).trim();
+    
+    // Handle boolean values
+    if (value === 'true') value = true;
+    else if (value === 'false') value = false;
+    // Handle array values
+    else if (value.startsWith('[') && value.endsWith(']')) {
+      const arrayContent = value.slice(1, -1);
+      value = arrayContent.split(',').map(item => {
+        const trimmedItem = item.trim();
+        if (trimmedItem.startsWith('"') && trimmedItem.endsWith('"')) {
+          return trimmedItem.slice(1, -1);
+        }
+        return trimmedItem;
+      });
+    }
+    // Handle string values
+    else if ((value.startsWith('"') && value.endsWith('"')) || 
+             (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    
+    metadata[key] = value;
+  }
+  
+  return { metadata, body };
+}
+
+/**
+ * Generate YAML frontmatter from metadata object
+ */
+function generateFrontmatter(metadata) {
+  const lines = ['---'];
+  
+  for (const [key, value] of Object.entries(metadata)) {
+    if (value === null || value === undefined) continue;
+    
+    if (typeof value === 'boolean') {
+      lines.push(`${key}: ${value}`);
+    } else if (Array.isArray(value)) {
+      const arrayStr = value.map(item => `"${item}"`).join(', ');
+      lines.push(`${key}: [${arrayStr}]`);
+    } else {
+      lines.push(`${key}: "${value}"`);
+    }
+  }
+  
+  lines.push('---');
+  return lines.join('\n') + '\n';
+}
+
+/**
+ * Prompt user for input (non-interactive version for MCP)
+ */
+function question(rl, prompt) {
+  return new Promise((resolve) => {
+    rl.question(prompt, resolve);
+  });
+}
+
+/**
+ * Parse array input from user
+ */
+function parseArrayInput(input) {
+  if (!input || input.trim() === '') return [];
+  return input.split(/[,\s]+/).map(s => s.trim()).filter(s => s);
+}
+
+/**
+ * Reconfigure granular rules
+ */
+async function reconfigureRules(args) {
+  const { projectPath = process.cwd(), purpose } = args || {};
+  const rulesDir = join(projectPath, '.cursor', 'rules');
+  
+  if (!existsSync(rulesDir)) {
+    throw new Error('Rules directory not found. Run setup first.');
+  }
+
+  const results = [];
+  
+  try {
+    // Fetch available rules from framework API
+    const apiRules = await fetchRulesFromAPI();
+    
+    // Filter by purpose if specified
+    const purposesToProcess = purpose 
+      ? apiRules.filter(r => r.name === purpose)
+      : apiRules;
+
+    for (const rulePurpose of purposesToProcess) {
+      const purposeName = rulePurpose.name;
+      const purposeDir = join(rulesDir, purposeName);
+      
+      if (!existsSync(purposeDir)) {
+        results.push({
+          purpose: purposeName,
+          status: 'skipped',
+          message: 'Purpose directory not found locally'
+        });
+        continue;
+      }
+
+      // Get local rules
+      const localFiles = existsSync(purposeDir) 
+        ? readdirSync(purposeDir).filter(f => f.endsWith('.mdc'))
+        : [];
+
+      // Process each rule file
+      for (const fileName of rulePurpose.files || []) {
+        const rulePath = join(purposeDir, fileName);
+        const ruleExists = existsSync(rulePath);
+        
+        if (ruleExists) {
+          try {
+            // Fetch latest version from server
+            const serverResponse = await fetch(`${config.frameworkUrl}/rules/${purposeName}/${fileName}`);
+            if (serverResponse.ok) {
+              const serverContent = await serverResponse.text();
+              const localContent = readFileSync(rulePath, 'utf8');
+              
+              const { metadata: localMetadata } = parseFrontmatter(localContent);
+              const { metadata: serverMetadata } = parseFrontmatter(serverContent);
+              
+              results.push({
+                purpose: purposeName,
+                file: fileName,
+                status: 'exists',
+                localMetadata,
+                serverMetadata,
+                canReconfigure: true
+              });
+            }
+          } catch (error) {
+            results.push({
+              purpose: purposeName,
+              file: fileName,
+              status: 'error',
+              error: error.message
+            });
+          }
+        } else {
+          results.push({
+            purpose: purposeName,
+            file: fileName,
+            status: 'not_found',
+            message: 'Rule not found locally'
+          });
+        }
+      }
+    }
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            message: 'Rules reconfigured. Use sync_rules to update from server.',
+            results
+          }, null, 2)
+        }
+      ]
+    };
+  } catch (error) {
+    throw new Error(`Failed to reconfigure rules: ${error.message}`);
+  }
+}
+
+/**
+ * Sync rules from server with conflict detection
+ */
+async function syncRules(args) {
+  const { projectPath = process.cwd(), frameworkUrl = config.frameworkUrl, autoResolve = 'none' } = args || {};
+  const rulesDir = join(projectPath, '.cursor', 'rules');
+  
+  if (!existsSync(rulesDir)) {
+    mkdirSync(rulesDir, { recursive: true });
+  }
+
+  const conflicts = [];
+  const synced = [];
+  const errors = [];
+
+  try {
+    // Fetch rules from server
+    const apiRules = await fetchRulesFromAPI();
+    
+    for (const rulePurpose of apiRules) {
+      const purposeName = rulePurpose.name;
+      const purposeDir = join(rulesDir, purposeName);
+      mkdirSync(purposeDir, { recursive: true });
+
+      for (const fileName of rulePurpose.files || []) {
+        const rulePath = join(purposeDir, fileName);
+        const ruleExists = existsSync(rulePath);
+        
+        try {
+          // Fetch server version
+          const serverResponse = await fetch(`${frameworkUrl}/rules/${purposeName}/${fileName}`);
+          if (!serverResponse.ok) {
+            errors.push({
+              purpose: purposeName,
+              file: fileName,
+              error: `Server returned ${serverResponse.status}`
+            });
+            continue;
+          }
+
+          const serverContent = await serverResponse.text();
+          
+          if (ruleExists) {
+            // Check for conflicts
+            const localContent = readFileSync(rulePath, 'utf8');
+            
+            if (localContent !== serverContent) {
+              const { metadata: localMetadata } = parseFrontmatter(localContent);
+              const { metadata: serverMetadata } = parseFrontmatter(serverContent);
+              
+              // Check if it's a real conflict (different metadata or body)
+              const localBody = parseFrontmatter(localContent).body;
+              const serverBody = parseFrontmatter(serverContent).body;
+              
+              if (localBody !== serverBody || JSON.stringify(localMetadata) !== JSON.stringify(serverMetadata)) {
+                conflicts.push({
+                  purpose: purposeName,
+                  file: fileName,
+                  local: { metadata: localMetadata, body: localBody.substring(0, 200) },
+                  server: { metadata: serverMetadata, body: serverBody.substring(0, 200) }
+                });
+
+                // Auto-resolve if requested
+                if (autoResolve === 'server') {
+                  writeFileSync(rulePath, serverContent);
+                  synced.push({ purpose: purposeName, file: fileName, action: 'updated_from_server' });
+                } else if (autoResolve === 'local') {
+                  synced.push({ purpose: purposeName, file: fileName, action: 'kept_local' });
+                }
+                // If autoResolve === 'none', leave conflict for user to resolve
+              } else {
+                // No actual conflict, files are the same
+                synced.push({ purpose: purposeName, file: fileName, action: 'unchanged' });
+              }
+            } else {
+              synced.push({ purpose: purposeName, file: fileName, action: 'unchanged' });
+            }
+          } else {
+            // New file, just sync it
+            writeFileSync(rulePath, serverContent);
+            synced.push({ purpose: purposeName, file: fileName, action: 'added' });
+          }
+        } catch (error) {
+          errors.push({
+            purpose: purposeName,
+            file: fileName,
+            error: error.message
+          });
+        }
+      }
+    }
+
+    const result = {
+      synced: synced.length,
+      conflicts: conflicts.length,
+      errors: errors.length,
+      syncedFiles: synced,
+      conflicts: conflicts,
+      errors: errors
+    };
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(result, null, 2)
+        }
+      ]
+    };
+  } catch (error) {
+    throw new Error(`Failed to sync rules: ${error.message}`);
+  }
+}
+
+/**
+ * Push rules to git
+ */
+async function pushRulesToGit(args) {
+  const { projectPath = process.cwd(), commitMessage, branch, remote = 'origin' } = args || {};
+  
+  // Check if git is initialized
+  if (!existsSync(join(projectPath, '.git'))) {
+    throw new Error('Git repository not initialized');
+  }
+
+  try {
+    // Check git status
+    const statusOutput = execSync('git status --porcelain', { 
+      cwd: projectPath, 
+      encoding: 'utf8' 
+    });
+
+    if (!statusOutput.trim()) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              message: 'No changes to commit',
+              status: 'clean'
+            }, null, 2)
+          }
+        ]
+      };
+    }
+
+    // Check if rules directory has changes
+    const rulesChanges = statusOutput.split('\n').filter(line => 
+      line.trim().startsWith('.cursor/rules/')
+    );
+
+    if (rulesChanges.length === 0) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              message: 'No rule changes detected',
+              status: 'no_rules_changes'
+            }, null, 2)
+          }
+        ]
+      };
+    }
+
+    // Check git write access
+    try {
+      execSync('git fetch', { 
+        cwd: projectPath, 
+        stdio: 'pipe',
+        timeout: 5000
+      });
+    } catch (error) {
+      throw new Error('No git write access or remote not configured');
+    }
+
+    // Stage rule changes
+    execSync('git add .cursor/rules/', { 
+      cwd: projectPath, 
+      stdio: 'pipe' 
+    });
+
+    // Commit
+    const finalCommitMessage = commitMessage || 'Update rules from Rules Framework';
+    execSync(`git commit -m "${finalCommitMessage}"`, { 
+      cwd: projectPath, 
+      stdio: 'pipe' 
+    });
+
+    // Get current branch if not specified
+    const currentBranch = branch || execSync('git rev-parse --abbrev-ref HEAD', { 
+      cwd: projectPath, 
+      encoding: 'utf8' 
+    }).trim();
+
+    // Push
+    try {
+      execSync(`git push ${remote} ${currentBranch}`, { 
+        cwd: projectPath, 
+        stdio: 'pipe' 
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              message: 'Rules pushed to git successfully',
+              branch: currentBranch,
+              remote: remote,
+              filesChanged: rulesChanges.length
+            }, null, 2)
+          }
+        ]
+      };
+    } catch (error) {
+      throw new Error(`Failed to push to git: ${error.message}`);
+    }
+  } catch (error) {
+    throw new Error(`Git operation failed: ${error.message}`);
+  }
+}
+
+/**
+ * Search rules
+ */
+async function searchRules(args) {
+  const { query, purpose, searchContent = true } = args || {};
+  
+  if (!query) {
+    throw new Error('Search query is required');
+  }
+
+  const results = [];
+  
+  try {
+    // Fetch rules from API
+    const apiRules = await fetchRulesFromAPI();
+    
+    // Filter by purpose if specified
+    const purposesToSearch = purpose 
+      ? apiRules.filter(r => r.name === purpose)
+      : apiRules;
+
+    for (const rulePurpose of purposesToSearch) {
+      const purposeName = rulePurpose.name;
+      
+      // Search in purpose name/description
+      if (purposeName.toLowerCase().includes(query.toLowerCase()) ||
+          (rulePurpose.description && rulePurpose.description.toLowerCase().includes(query.toLowerCase()))) {
+        results.push({
+          type: 'purpose',
+          purpose: purposeName,
+          description: rulePurpose.description,
+          match: 'purpose_name_or_description'
+        });
+      }
+
+      // Search in rule files
+      for (const fileName of rulePurpose.files || []) {
+        // Search in filename
+        if (fileName.toLowerCase().includes(query.toLowerCase())) {
+          results.push({
+            type: 'file',
+            purpose: purposeName,
+            file: fileName,
+            match: 'filename'
+          });
+        }
+
+        // Search in content if requested
+        if (searchContent) {
+          try {
+            const ruleResponse = await fetch(`${config.frameworkUrl}/rules/${purposeName}/${fileName}`);
+            if (ruleResponse.ok) {
+              const content = await ruleResponse.text();
+              const { metadata, body } = parseFrontmatter(content);
+              
+              // Search in metadata
+              const metadataStr = JSON.stringify(metadata).toLowerCase();
+              if (metadataStr.includes(query.toLowerCase())) {
+                results.push({
+                  type: 'file',
+                  purpose: purposeName,
+                  file: fileName,
+                  match: 'metadata',
+                  metadata: metadata
+                });
+              }
+              
+              // Search in body
+              if (body.toLowerCase().includes(query.toLowerCase())) {
+                const matchIndex = body.toLowerCase().indexOf(query.toLowerCase());
+                const contextStart = Math.max(0, matchIndex - 50);
+                const contextEnd = Math.min(body.length, matchIndex + query.length + 50);
+                const context = body.substring(contextStart, contextEnd);
+                
+                results.push({
+                  type: 'file',
+                  purpose: purposeName,
+                  file: fileName,
+                  match: 'content',
+                  context: context
+                });
+              }
+            }
+          } catch (error) {
+            // Skip if can't fetch
+          }
+        }
+      }
+    }
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            query,
+            resultsCount: results.length,
+            results: results
+          }, null, 2)
+        }
+      ]
+    };
+  } catch (error) {
+    throw new Error(`Search failed: ${error.message}`);
+  }
 }
 
 // Start the MCP server

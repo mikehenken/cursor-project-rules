@@ -36,6 +36,18 @@ function main() {
     case 'test':
       runTest();
       break;
+    case 'reconfigure':
+      runReconfigure(args.slice(1));
+      break;
+    case 'sync':
+      runSync(args.slice(1));
+      break;
+    case 'push':
+      runPush(args.slice(1));
+      break;
+    case 'search':
+      runSearch(args.slice(1));
+      break;
     case 'help':
     default:
       showHelp();
@@ -125,6 +137,110 @@ function runTest() {
 }
 
 /**
+ * Run reconfigure command
+ */
+function runReconfigure(args) {
+  console.log('🔧 Reconfiguring granular rules...\n');
+  
+  const purpose = args.find(arg => arg.startsWith('--purpose='))?.split('=')[1];
+  
+  try {
+    const reconfigureScript = join(__dirname, 'reconfigure-rules.js');
+    execSync(`node "${reconfigureScript}" ${purpose ? `--purpose=${purpose}` : ''}`, { 
+      stdio: 'inherit',
+      cwd: process.cwd()
+    });
+  } catch (error) {
+    console.error('❌ Reconfigure failed:', error.message);
+    process.exit(1);
+  }
+}
+
+/**
+ * Run sync command
+ */
+function runSync(args) {
+  console.log('🔄 Syncing rules from server...\n');
+  
+  const autoResolve = args.find(arg => arg.startsWith('--resolve='))?.split('=')[1] || 'none';
+  const frameworkUrl = args.find(arg => arg.startsWith('--url='))?.split('=')[1];
+  
+  try {
+    const syncScript = join(__dirname, 'sync-rules.js');
+    const env = { 
+      ...process.env,
+      RULES_FRAMEWORK_URL: frameworkUrl || 'https://rules-framework.mikehenken.workers.dev',
+      AUTO_RESOLVE: autoResolve
+    };
+    execSync(`node "${syncScript}"`, { 
+      stdio: 'inherit',
+      cwd: process.cwd(),
+      env
+    });
+  } catch (error) {
+    console.error('❌ Sync failed:', error.message);
+    process.exit(1);
+  }
+}
+
+/**
+ * Run push command
+ */
+function runPush(args) {
+  console.log('📤 Pushing rules to git...\n');
+  
+  const commitMessage = args.find(arg => arg.startsWith('--message='))?.split('=')[1];
+  const branch = args.find(arg => arg.startsWith('--branch='))?.split('=')[1];
+  const remote = args.find(arg => arg.startsWith('--remote='))?.split('=')[1] || 'origin';
+  
+  try {
+    const pushScript = join(__dirname, 'push-rules-git.js');
+    const env = { 
+      ...process.env,
+      COMMIT_MESSAGE: commitMessage,
+      BRANCH: branch,
+      REMOTE: remote
+    };
+    execSync(`node "${pushScript}"`, { 
+      stdio: 'inherit',
+      cwd: process.cwd(),
+      env
+    });
+  } catch (error) {
+    console.error('❌ Push failed:', error.message);
+    process.exit(1);
+  }
+}
+
+/**
+ * Run search command
+ */
+function runSearch(args) {
+  console.log('🔍 Searching rules...\n');
+  
+  const query = args.find(arg => !arg.startsWith('--')) || args[0];
+  const purpose = args.find(arg => arg.startsWith('--purpose='))?.split('=')[1];
+  const noContent = args.includes('--no-content');
+  
+  if (!query) {
+    console.error('❌ Search query required');
+    console.log('Usage: rules search <query> [--purpose=<purpose>] [--no-content]');
+    process.exit(1);
+  }
+  
+  try {
+    const searchScript = join(__dirname, 'search-rules.js');
+    execSync(`node "${searchScript}" "${query}" ${purpose ? `--purpose=${purpose}` : ''} ${noContent ? '--no-content' : ''}`, { 
+      stdio: 'inherit',
+      cwd: process.cwd()
+    });
+  } catch (error) {
+    console.error('❌ Search failed:', error.message);
+    process.exit(1);
+  }
+}
+
+/**
  * Show help
  */
 function showHelp() {
@@ -135,6 +251,10 @@ function showHelp() {
   console.log('pull [type]    Pull files from framework (deployment|rules|docs|all)');
   console.log('deploy         Deploy framework to Cloudflare');
   console.log('test           Test framework endpoints');
+  console.log('reconfigure    Reconfigure granular rules');
+  console.log('sync           Sync rules from server with conflict detection');
+  console.log('push           Push rules to git');
+  console.log('search         Search for rules');
   console.log('help           Show this help message\n');
   
   console.log('Examples:');
@@ -146,14 +266,17 @@ function showHelp() {
   console.log('  # Pull deployment files');
   console.log('  rules pull deployment\n');
   
-  console.log('  # Pull all files');
-  console.log('  rules pull all\n');
+  console.log('  # Reconfigure rules');
+  console.log('  rules reconfigure --purpose=core\n');
   
-  console.log('  # Deploy framework');
-  console.log('  rules deploy\n');
+  console.log('  # Sync rules from server');
+  console.log('  rules sync --resolve=server\n');
   
-  console.log('  # Test framework');
-  console.log('  rules test\n');
+  console.log('  # Push rules to git');
+  console.log('  rules push --message="Update rules" --branch=main\n');
+  
+  console.log('  # Search for rules');
+  console.log('  rules search "testing" --purpose=core\n');
   
   console.log('Framework URL:');
   console.log('==============');

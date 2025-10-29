@@ -1,0 +1,160 @@
+---
+description: CLI and script testing patterns for framework development
+alwaysApply: true
+globs: ["**/test-*.js", "**/*test*.js", "**/scripts/**/*.js"]
+---
+
+## CLI and Script Testing Requirements
+
+### MANDATORY: Test All CLI Commands and Scripts
+
+Every CLI command and standalone script MUST be tested in a fresh test directory before marking features complete.
+
+### Test Directory Pattern
+
+**ALWAYS test in `~/Projects/test-automations/` directory:**
+
+```bash
+# Create isolated test directory
+mkdir -p ~/Projects/test-automations/feature-name-test-$(date +%s)
+cd ~/Projects/test-automations/feature-name-test-*
+
+# Run tests from the test directory
+node /path/to/framework/scripts/test-script.js
+```
+
+### Test Execution Protocol
+
+1. **Create Fresh Test Environment**
+   - Use timestamped directory names to avoid conflicts
+   - Start with clean state (no git, no existing rules)
+   - Test in isolation from main project
+
+2. **Test All Features**
+   - Test each CLI command individually
+   - Test MCP server tools availability
+   - Test error handling and edge cases
+   - Test with real data (not mocks)
+
+3. **Verify Results**
+   - Check that files are created/modified correctly
+   - Verify command output matches expected format
+   - Ensure no errors occur during execution
+   - Validate data structures match expectations
+
+### Test Script Requirements
+
+**Every test script MUST:**
+
+- Calculate paths correctly regardless of execution location
+- Use absolute paths to framework files when running from test directory
+- Handle ES module imports correctly (`import.meta.url` for `__dirname`)
+- Provide clear pass/fail reporting
+- Test both success and failure scenarios
+
+### Path Calculation Pattern
+
+```javascript
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// For scripts in framework/development/scripts/
+// __dirname is: /path/to/rules-framework/framework/development/scripts/
+// Framework root is: ../../.. (three levels up)
+const FRAMEWORK_ROOT = join(__dirname, '../../..');
+const SCRIPT_PATH = join(FRAMEWORK_ROOT, 'framework/development/scripts/other-script.js');
+```
+
+### Test Coverage Requirements
+
+**MUST test:**
+- ✅ Script file exists and is executable
+- ✅ CLI command shows in help/usage
+- ✅ MCP server includes new tools
+- ✅ Basic functionality works
+- ✅ Error handling works correctly
+- ✅ Edge cases (missing files, invalid input, etc.)
+
+### Test Script Structure
+
+```javascript
+#!/usr/bin/env node
+
+import { execSync } from 'child_process';
+import { existsSync, readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const FRAMEWORK_ROOT = join(__dirname, '../../..');
+
+let testsPassed = 0;
+let testsFailed = 0;
+
+function assert(condition, message) {
+  if (condition) {
+    testsPassed++;
+    console.log(`✅ ${message}`);
+  } else {
+    testsFailed++;
+    console.error(`❌ ${message}`);
+  }
+}
+
+async function testFeature() {
+  // Test implementation
+}
+
+async function main() {
+  await testFeature();
+  
+  console.log(`\n✅ Passed: ${testsPassed}`);
+  console.log(`❌ Failed: ${testsFailed}`);
+  
+  process.exit(testsFailed === 0 ? 0 : 1);
+}
+
+main().catch(console.error);
+```
+
+### Integration with Framework Features
+
+When adding new features:
+1. Create test script in `framework/development/scripts/test-<feature>.js`
+2. Test in `~/Projects/test-automations/` directory
+3. Verify all functionality works end-to-end
+4. Document test results
+
+### Failure Protocol
+
+If tests fail:
+- **DO NOT** mark feature as complete
+- Fix issues and re-test
+- Ensure all tests pass before completion
+- Document any known limitations
+
+### Example: Testing New CLI Command
+
+```bash
+# 1. Create test directory
+mkdir -p ~/Projects/test-automations/test-cli-$(date +%s)
+cd ~/Projects/test-automations/test-cli-*
+
+# 2. Run test script
+node /home/mikeh/Projects/rules-framework/framework/development/scripts/test-features.js
+
+# 3. Verify results
+# Should show all tests passing
+```
+
+### Key Principles
+
+- **Isolation**: Each test runs in its own directory
+- **Real Data**: Use actual API calls and file operations
+- **Comprehensive**: Test happy path AND error cases
+- **Repeatable**: Tests should work the same way every time
+- **Clear Reporting**: Easy to see what passed/failed
