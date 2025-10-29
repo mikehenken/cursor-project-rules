@@ -18,13 +18,19 @@ prompt_yes_no() {
     local default="$2"
     local response
     
-    if [ "$default" = "yes" ]; then
-        prompt="${prompt} [Y/n]: "
-    else
-        prompt="${prompt} [y/N]: "
+    # Use /dev/tty if available, otherwise use stdin
+    local input_source="/dev/tty"
+    if [ ! -e "$input_source" ]; then
+        input_source="/dev/stdin"
     fi
     
-    read -p "$prompt" response < /dev/tty
+    if [ "$default" = "yes" ]; then
+        printf "%s [Y/n]: " "$prompt" >&2
+    else
+        printf "%s [y/N]: " "$prompt" >&2
+    fi
+    
+    read response < "$input_source"
     response=${response:-$default}
     
     case "$response" in
@@ -43,11 +49,23 @@ prompt_input() {
     local default="$2"
     local response
     
+    # Use /dev/tty if available, otherwise use stdin
+    local input_source="/dev/tty"
+    if [ ! -e "$input_source" ]; then
+        input_source="/dev/stdin"
+    fi
+    
     if [ -n "$default" ]; then
-        read -p "${prompt} [${default}]: " response < /dev/tty
+        printf "%s [%s]: " "$prompt" "$default" >&2
+    else
+        printf "%s: " "$prompt" >&2
+    fi
+    
+    read response < "$input_source"
+    
+    if [ -n "$default" ]; then
         echo "${response:-$default}"
     else
-        read -p "${prompt}: " response < /dev/tty
         echo "$response"
     fi
 }
@@ -60,20 +78,26 @@ prompt_choice() {
     local options=("$@")
     local response
     
-    # Output prompt and options directly to /dev/tty so they display immediately
+    # Use /dev/tty if available, otherwise use stdin
+    local input_source="/dev/tty"
+    if [ ! -e "$input_source" ]; then
+        input_source="/dev/stdin"
+    fi
+    
+    # Output prompt and options to stderr so they display immediately
     # even when called via command substitution
-    printf "%s\n" "$prompt" > /dev/tty
+    printf "%s\n" "$prompt" >&2
     for i in "${!options[@]}"; do
         local marker=""
         if [ "${options[$i]}" = "$default" ]; then
             marker=" (default)"
         fi
-        printf "  %d. %s%s\n" $((i+1)) "${options[$i]}" "$marker" > /dev/tty
+        printf "  %d. %s%s\n" $((i+1)) "${options[$i]}" "$marker" >&2
     done
     
-    # Print prompt to /dev/tty, then read from /dev/tty
-    printf "Enter choice [1-${#options[@]}]: " > /dev/tty
-    read response < /dev/tty
+    # Print prompt to stderr, then read from input source
+    printf "Enter choice [1-${#options[@]}]: " >&2
+    read response < "$input_source"
     
     if [ -z "$response" ]; then
         echo "$default"
@@ -179,14 +203,19 @@ mkdir -p .cursor
 echo "📥 Downloading MCP server..."
 curl -s "${FRAMEWORK_URL}/files/mcp-server.js" > mcp-server.js
 
-# Create MCP configuration
+# Get absolute path to project directory
+PROJECT_DIR=$(pwd)
+MCP_SERVER_PATH="${PROJECT_DIR}/mcp-server.js"
+
+# Create MCP configuration in project directory
 echo "⚙️  Creating MCP configuration..."
+mkdir -p .cursor
 cat > .cursor/mcp.json << EOF
 {
   "mcpServers": {
     "rules-framework": {
       "command": "node",
-      "args": ["mcp-server.js"],
+      "args": ["${MCP_SERVER_PATH}"],
       "env": {
         "RULES_FRAMEWORK_URL": "${FRAMEWORK_URL}"
       }
@@ -194,6 +223,25 @@ cat > .cursor/mcp.json << EOF
   }
 }
 EOF
+
+# Also update MCP configuration in user's home directory
+# Cursor reads from ~/.cursor/mcp.json, not the project directory
+echo "⚙️  Updating MCP configuration in home directory..."
+mkdir -p "${HOME}/.cursor"
+cat > "${HOME}/.cursor/mcp.json" << EOF
+{
+  "mcpServers": {
+    "rules-framework": {
+      "command": "node",
+      "args": ["${MCP_SERVER_PATH}"],
+      "env": {
+        "RULES_FRAMEWORK_URL": "${FRAMEWORK_URL}"
+      }
+    }
+  }
+}
+EOF
+echo "  ✅ MCP configuration updated at ${HOME}/.cursor/mcp.json"
 
 # Download setup wizard
 echo "📥 Downloading setup wizard..."

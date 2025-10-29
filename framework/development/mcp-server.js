@@ -8,7 +8,7 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
@@ -314,7 +314,7 @@ async function listRules(args) {
   const rules = [];
 
   if (purpose) {
-    const purposeDir = join(config.rulesDir, purpose, '.cursor', 'rules');
+    const purposeDir = join(config.rulesDir, purpose);
     if (existsSync(purposeDir)) {
       const files = readdirSync(purposeDir).filter(f => f.endsWith('.mdc'));
       rules.push({
@@ -329,7 +329,7 @@ async function listRules(args) {
   } else {
     const purposes = ['core', 'backend', 'docs', 'testing', 'ci-cd'];
     for (const p of purposes) {
-      const purposeDir = join(config.rulesDir, p, '.cursor', 'rules');
+      const purposeDir = join(config.rulesDir, p);
       if (existsSync(purposeDir)) {
         const files = readdirSync(purposeDir).filter(f => f.endsWith('.mdc'));
         rules.push({
@@ -359,7 +359,7 @@ async function listRules(args) {
  */
 async function getRule(args) {
   const { purpose, ruleName } = args;
-  const rulePath = join(config.rulesDir, purpose, '.cursor', 'rules', ruleName);
+  const rulePath = join(config.rulesDir, purpose, ruleName);
   
   if (!existsSync(rulePath)) {
     throw new Error(`Rule not found: ${purpose}/${ruleName}`);

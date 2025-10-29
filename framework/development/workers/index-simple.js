@@ -263,14 +263,18 @@ mkdir -p .cursor
 echo "  📥 Downloading MCP server..."
 curl -s "\${FRAMEWORK_URL}/files/mcp-server.js" > mcp-server.js
 
-# Configure MCP
+# Get absolute path to project directory
+PROJECT_DIR=\$(pwd)
+MCP_SERVER_PATH="\${PROJECT_DIR}/mcp-server.js"
+
+# Configure MCP in project directory
 echo "  ⚙️  Configuring MCP integration..."
 cat > .cursor/mcp.json << EOF
 {
   "mcpServers": {
     "rules-framework": {
       "command": "node",
-      "args": ["mcp-server.js"],
+      "args": ["\${MCP_SERVER_PATH}"],
       "env": {
         "RULES_FRAMEWORK_URL": "\${FRAMEWORK_URL}"
       }
@@ -278,6 +282,25 @@ cat > .cursor/mcp.json << EOF
   }
 }
 EOF
+
+# Also update MCP configuration in user's home directory
+# Cursor reads from ~/.cursor/mcp.json, not the project directory
+echo "  ⚙️  Updating MCP configuration in home directory..."
+mkdir -p "\${HOME}/.cursor"
+cat > "\${HOME}/.cursor/mcp.json" << EOF
+{
+  "mcpServers": {
+    "rules-framework": {
+      "command": "node",
+      "args": ["\${MCP_SERVER_PATH}"],
+      "env": {
+        "RULES_FRAMEWORK_URL": "\${FRAMEWORK_URL}"
+      }
+    }
+  }
+}
+EOF
+echo "  ✅ MCP configuration updated at \${HOME}/.cursor/mcp.json"
 
 # Download setup wizard
 echo "  📥 Downloading setup wizard..."

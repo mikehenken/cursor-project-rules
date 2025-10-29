@@ -74,6 +74,74 @@ alwaysApply: true
 - Monitor MCP integration functionality
 - Ensure documentation accuracy
 
+## Setup Script Deployment Workflow
+
+### Mandatory Deployment Requirements
+
+**CRITICAL**: Any changes to setup scripts or setup wizard MUST follow this workflow before marking as complete:
+
+#### Affected Files
+- `setup.sh` (repo root)
+- `framework/development/scripts/setup-wizard.js`
+
+#### Deployment Steps (MANDATORY)
+
+1. **Deploy Changes to R2**
+   - Run deployment script: `npm run deploy:framework` or `node framework/development/deployment/scripts/deploy-framework.js`
+   - Verify files are uploaded to R2 bucket: `rules-framework-files`
+   - Files must be deployed: `setup.sh` and `setup-wizard.js`
+
+2. **Verify R2 Diff**
+   - Check that files were updated in R2 storage
+   - Use `wrangler r2 object get rules-framework-files/setup.sh` to download and verify
+   - Use `wrangler r2 object get rules-framework-files/setup-wizard.js` to download and verify
+   - Compare deployed content with local changes to ensure they match
+   - Verify file content includes all intended changes
+
+3. **Test in Test Environment**
+   - Test setup in `~/Projects/test-automations` directory
+   - Create a fresh test directory: `mkdir -p ~/Projects/test-automations/test-setup-$(date +%s)`
+   - Run the setup script from the deployed URL: `curl -s https://rules-framework.mikehenken.workers.dev/files/setup.sh | bash`
+   - Verify setup wizard runs correctly with all changes
+   - Test all interactive features and flag combinations
+   - Verify no errors occur during setup process
+
+4. **Completion Criteria**
+   - ✅ Changes deployed to R2
+   - ✅ R2 diff verified (files match local changes)
+   - ✅ Tested successfully in `~/Projects/test-automations` directory
+   - ✅ No errors during test setup
+   - ✅ All functionality works as expected
+
+#### Failure Protocol
+
+If any step fails:
+- **DO NOT** mark the task as complete
+- Fix the issue and restart from step 1
+- Document any failures and resolutions
+- Re-test from the beginning until all steps pass
+
+#### Verification Commands
+
+```bash
+# Deploy to R2
+npm run deploy:framework
+
+# Verify R2 files
+wrangler r2 object get rules-framework-files/setup.sh --file /tmp/setup.sh
+wrangler r2 object get rules-framework-files/setup-wizard.js --file /tmp/setup-wizard.js
+
+# Compare local vs deployed (example)
+diff setup.sh /tmp/setup.sh
+diff framework/development/scripts/setup-wizard.js /tmp/setup-wizard.js
+
+# Test in test-automations directory
+cd ~/Projects/test-automations
+mkdir test-setup-$(date +%s)
+cd test-setup-*
+curl -s https://rules-framework.mikehenken.workers.dev/files/setup.sh | bash
+```
+
 ## Best Practices
 
 ### Development Workflow

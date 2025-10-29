@@ -12,6 +12,9 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { createInterface } from 'readline';
 
+// Framework URL - can be overridden via environment variable
+const FRAMEWORK_URL = process.env.RULES_FRAMEWORK_URL || 'https://rules-framework.mikehenken.workers.dev';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -63,6 +66,9 @@ async function main() {
       await setupCloudflare();
     }
 
+    // Always download and install rules
+    await downloadAndInstallRules();
+
     // Handle granular rules if requested
     if (config.granularRules) {
       await handleGranularRules();
@@ -94,10 +100,76 @@ async function main() {
 }
 
 /**
+ * Clean up any leftover framework temp directories
+ */
+function cleanupFrameworkTempDirs() {
+  try {
+    const cwd = process.cwd();
+    const parentDir = join(cwd, '..');
+    
+    // Check current directory for any .framework-temp-* directories
+    if (fs.existsSync(cwd)) {
+      try {
+        const currentFiles = fs.readdirSync(cwd);
+        const currentTempDirs = currentFiles.filter(file => 
+          file.startsWith('.framework-temp-') && 
+          fs.statSync(join(cwd, file)).isDirectory()
+        );
+        
+        if (currentTempDirs.length > 0) {
+          console.log(`🧹 Cleaning up ${currentTempDirs.length} leftover temporary directory(ies) in current directory...`);
+          currentTempDirs.forEach(dir => {
+            try {
+              fs.rmSync(join(cwd, dir), { recursive: true, force: true });
+              console.log(`  ✅ Removed ${dir}`);
+            } catch (error) {
+              console.log(`  ⚠️  Could not remove ${dir}: ${error.message}`);
+            }
+          });
+        }
+      } catch (error) {
+        // Non-fatal: just continue
+      }
+    }
+    
+    // Check parent directory for any .framework-temp-* directories
+    if (fs.existsSync(parentDir)) {
+      try {
+        const parentFiles = fs.readdirSync(parentDir);
+        const parentTempDirs = parentFiles.filter(file => 
+          file.startsWith('.framework-temp-') && 
+          fs.statSync(join(parentDir, file)).isDirectory()
+        );
+        
+        if (parentTempDirs.length > 0) {
+          console.log(`🧹 Cleaning up ${parentTempDirs.length} leftover temporary directory(ies) in parent directory...`);
+          parentTempDirs.forEach(dir => {
+            try {
+              fs.rmSync(join(parentDir, dir), { recursive: true, force: true });
+              console.log(`  ✅ Removed ${dir}`);
+            } catch (error) {
+              console.log(`  ⚠️  Could not remove ${dir}: ${error.message}`);
+            }
+          });
+        }
+      } catch (error) {
+        // Non-fatal: just continue
+      }
+    }
+  } catch (error) {
+    // Non-fatal: just log and continue
+    console.log(`  ⚠️  Could not check for leftover temp directories: ${error.message}`);
+  }
+}
+
+/**
  * Setup Next.js
  */
 async function setupNextJS() {
   console.log('🚀 Running Next.js setup...');
+  
+  // Clean up any leftover temp directories first
+  cleanupFrameworkTempDirs();
   
   const files = fs.readdirSync('.');
   const hasNextJS = files.some(file => 
@@ -149,8 +221,12 @@ async function setupNextJS() {
   // Always move framework files if they exist, even if no other conflicts
   if (frameworkFilesToMove.some(file => fs.existsSync(file))) {
     console.log('⚠️  Temporarily moving framework files before Next.js setup...');
-    tempDir = `.framework-temp-${Date.now()}`;
-    fs.mkdirSync(tempDir);
+    // Create temp dir in parent directory to avoid create-next-app conflicts
+    // create-next-app is very strict and checks for ANY files/dirs, even hidden ones
+    const cwd = process.cwd();
+    const parentDir = join(cwd, '..');
+    tempDir = join(parentDir, `.framework-temp-${Date.now()}`);
+    fs.mkdirSync(tempDir, { recursive: true });
     
     frameworkFilesToMove.forEach(file => {
       if (fs.existsSync(file)) {
@@ -174,6 +250,9 @@ async function setupNextJS() {
     console.log('🗑️  Removing node_modules (will be reinstalled by Next.js)...');
     fs.rmSync('node_modules', { recursive: true, force: true });
   }
+  
+  // Note: tempDir is created with leading dot (hidden) so create-next-app shouldn't see it
+  // But create-next-app is very strict - if it still complains, we'll handle it
   
   // If there are other conflicting files, we need to handle them
   if (conflictingFiles.length > 0) {
@@ -219,6 +298,7 @@ async function setupNextJS() {
       // Note: package.json is kept from Next.js setup, we don't restore the original
       // as Next.js creates its own with all necessary dependencies
       
+      // Clean up temp directory
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
 
@@ -237,6 +317,7 @@ async function setupNextJS() {
     }
   } catch (error) {
     // Restore framework files on error (including package.json)
+    // tempDir is in parent directory now
     if (tempDir && fs.existsSync(tempDir)) {
       const frameworkFilesToRestore = ['.cursor', 'mcp-server.js', 'setup-wizard.js', 'setup.sh', 'package.json'];
       frameworkFilesToRestore.forEach(file => {
@@ -405,6 +486,66 @@ DEPLOYMENT_TYPE=${config.cloudflareTarget.toLowerCase().replace('cloudflare ', '
   }
 
   console.log('  ✅ Cloudflare configuration complete!');
+}
+
+/**
+ * Download and install rules from framework API
+ */
+async function downloadAndInstallRules() {
+  console.log('📋 Downloading rules from framework...');
+  
+  try {
+    // First, get the list of available rules
+    const listResponse = await fetch(`${FRAMEWORK_URL}/api/rules`);
+    
+    if (!listResponse.ok) {
+      throw new Error(`HTTP ${listResponse.status}: ${listResponse.statusText}`);
+    }
+
+    const rulesList = await listResponse.json();
+    
+    if (!Array.isArray(rulesList)) {
+      throw new Error('Invalid response format: expected array');
+    }
+
+    // Ensure .cursor/rules directory exists
+    const rulesDir = join(process.cwd(), '.cursor', 'rules');
+    if (!fs.existsSync(rulesDir)) {
+      fs.mkdirSync(rulesDir, { recursive: true });
+    }
+
+    // Download each rule file
+    for (const rulePurpose of rulesList) {
+      const purpose = rulePurpose.name;
+      const purposeDir = join(rulesDir, purpose);
+      fs.mkdirSync(purposeDir, { recursive: true });
+
+      for (const fileName of rulePurpose.files || []) {
+        try {
+          const ruleResponse = await fetch(`${FRAMEWORK_URL}/rules/${purpose}/${fileName}`);
+          
+          if (!ruleResponse.ok) {
+            console.log(`  ⚠️  Failed to download ${purpose}/${fileName}: ${ruleResponse.status}`);
+            continue;
+          }
+
+          const content = await ruleResponse.text();
+          const filePath = join(purposeDir, fileName);
+          fs.writeFileSync(filePath, content);
+          console.log(`  ✅ Installed ${purpose}/${fileName}`);
+        } catch (error) {
+          console.log(`  ⚠️  Failed to download ${purpose}/${fileName}: ${error.message}`);
+        }
+      }
+    }
+
+    console.log('  ✅ Rules installed successfully!');
+  } catch (error) {
+    console.log(`  ⚠️  Failed to download rules: ${error.message}`);
+    console.log('  💡 You can manually download rules later using:');
+    console.log(`     curl -s ${FRAMEWORK_URL}/api/rules`);
+    // Don't throw - allow setup to continue without rules
+  }
 }
 
 /**
