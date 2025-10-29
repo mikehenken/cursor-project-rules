@@ -14,6 +14,36 @@ alwaysApply: true
   - Executable scripts (`start.sh`, `setup.sh`, etc.)
   - `.gitignore`, `.cursorrules`, license files
 
+### Standard Project Structure:
+All new projects MUST follow this directory structure:
+
+```
+project-root/
+├── frontend/              # Frontend application (Next.js, React, etc.)
+│   ├── src/              # Source code
+│   ├── package.json      # Frontend dependencies
+│   └── ...
+├── backend/              # Backend application (FastAPI, etc.)
+│   ├── routers/          # API route handlers (lowercase_with_underscores)
+│   ├── models/           # Data models
+│   ├── schemas/           # Pydantic schemas
+│   ├── main.py           # Application entry point
+│   ├── requirements.txt  # Python dependencies
+│   └── ...
+├── docs/                 # Documentation (see structure below)
+├── README.md             # Project overview
+├── .gitignore           # Git ignore rules
+├── .cursorrules          # Cursor rules (if using Cursor IDE)
+└── ...                   # Root-level config files only
+```
+
+**Critical Rules:**
+- Frontend code MUST be in `frontend/` directory, NOT in root
+- Backend code MUST be in `backend/` directory
+- FastAPI MUST follow proper structure: `routers/`, `models/`, `schemas/` directories
+- FastAPI routers MUST use lowercase_with_underscores naming (e.g., `user_routes.py`)
+- Documentation MUST be in `docs/` directory, NOT in root
+
 ### Standard Documentation Structure:
 
 ```

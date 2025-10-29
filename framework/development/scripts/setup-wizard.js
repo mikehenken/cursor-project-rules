@@ -171,48 +171,54 @@ async function setupNextJS() {
   // Clean up any leftover temp directories first
   cleanupFrameworkTempDirs();
   
-  const files = fs.readdirSync('.');
-  const hasNextJS = files.some(file => 
-    ['next.config.ts', 'next.config.js', 'next-env.d.ts'].includes(file) ||
-    fs.existsSync('src/app') || fs.existsSync('pages')
-  );
+  const frontendDir = 'frontend';
+  
+  // Check if frontend directory already exists and has Next.js
+  if (fs.existsSync(frontendDir)) {
+    const frontendFiles = fs.readdirSync(frontendDir);
+    const hasNextJS = frontendFiles.some(file => 
+      ['next.config.ts', 'next.config.js', 'next-env.d.ts'].includes(file) ||
+      fs.existsSync(join(frontendDir, 'src/app')) || fs.existsSync(join(frontendDir, 'pages'))
+    );
 
-  if (hasNextJS) {
-    console.log('✅ Next.js already configured');
-    
-    // Update page.tsx to show Hello World if it exists
-    const pagePaths = [
-      'src/app/page.tsx',
-      'src/app/page.js',
-      'pages/index.tsx',
-      'pages/index.js'
-    ];
-    
-    for (const pagePath of pagePaths) {
-      if (fs.existsSync(pagePath)) {
-        const content = fs.readFileSync(pagePath, 'utf8');
-        if (!content.includes('Hello World')) {
-          // Simple Hello World page
-          const helloWorldPage = `export default function Home() {
+    if (hasNextJS) {
+      console.log('✅ Next.js already configured in frontend/');
+      
+      // Update page.tsx to show Hello World if it exists
+      const pagePaths = [
+        join(frontendDir, 'src/app/page.tsx'),
+        join(frontendDir, 'src/app/page.js'),
+        join(frontendDir, 'pages/index.tsx'),
+        join(frontendDir, 'pages/index.js')
+      ];
+      
+      for (const pagePath of pagePaths) {
+        if (fs.existsSync(pagePath)) {
+          const content = fs.readFileSync(pagePath, 'utf8');
+          if (!content.includes('Hello World')) {
+            // Simple Hello World page
+            const helloWorldPage = `export default function Home() {
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
       <h1>Hello World</h1>
     </div>
   );
 }`;
-          fs.writeFileSync(pagePath, helloWorldPage);
-          console.log(`  ✅ Updated ${pagePath} with Hello World`);
+            fs.writeFileSync(pagePath, helloWorldPage);
+            console.log(`  ✅ Updated ${pagePath} with Hello World`);
+          }
         }
       }
+      return;
     }
-    return;
   }
-
-  // Check for conflicting files (exclude framework files and hidden files)
+  
+  // Check for conflicting files in root (exclude framework files and hidden files)
+  const files = fs.readdirSync('.');
   const frameworkFilesToMove = ['.cursor', 'mcp-server.js', 'setup-wizard.js', 'setup.sh', 'package.json'];
   const conflictingFiles = files.filter(file => 
     !frameworkFilesToMove.includes(file) &&
-    !['package-lock.json', 'node_modules', '.git'].includes(file) &&
+    !['package-lock.json', 'node_modules', '.git', 'frontend', 'backend', 'docs'].includes(file) &&
     !file.startsWith('.')
   );
 
@@ -251,9 +257,6 @@ async function setupNextJS() {
     fs.rmSync('node_modules', { recursive: true, force: true });
   }
   
-  // Note: tempDir is created with leading dot (hidden) so create-next-app shouldn't see it
-  // But create-next-app is very strict - if it still complains, we'll handle it
-  
   // If there are other conflicting files, we need to handle them
   if (conflictingFiles.length > 0) {
     console.log(`⚠️  Warning: Found ${conflictingFiles.length} conflicting file(s): ${conflictingFiles.join(', ')}`);
@@ -262,14 +265,19 @@ async function setupNextJS() {
   }
 
   try {
-    console.log('📦 Installing Next.js with TypeScript and Tailwind...');
+    // Create frontend directory if it doesn't exist
+    if (!fs.existsSync(frontendDir)) {
+      fs.mkdirSync(frontendDir, { recursive: true });
+    }
+    
+    console.log('📦 Installing Next.js with TypeScript and Tailwind in frontend/...');
     execSync('npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias "@/*" --yes', { 
       stdio: 'inherit',
-      cwd: process.cwd()
+      cwd: join(process.cwd(), frontendDir)
     });
 
     // Update page.tsx with Hello World
-    const pagePath = 'src/app/page.tsx';
+    const pagePath = join(frontendDir, 'src/app/page.tsx');
     if (fs.existsSync(pagePath)) {
       const helloWorldPage = `export default function Home() {
   return (
@@ -302,14 +310,15 @@ async function setupNextJS() {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
 
-    console.log('✅ Next.js setup complete!');
+    console.log('✅ Next.js setup complete in frontend/!');
     
     // Add Cloudflare Workers dependencies if deploying to Cloudflare
     if (config.cloudflare && config.cloudflareTarget === 'Cloudflare Workers') {
       console.log('🔧 Adding Cloudflare Workers configuration...');
       try {
         execSync('npm install @cloudflare/next-on-pages @cloudflare/workers-types wrangler --legacy-peer-deps', { 
-          stdio: 'inherit' 
+          stdio: 'inherit',
+          cwd: join(process.cwd(), frontendDir)
         });
       } catch (error) {
         console.log('⚠️  Cloudflare dependencies installation failed, continuing...');
@@ -359,24 +368,88 @@ async function setupFastAPI() {
 }
 
 async function createFastAPIFiles(backendDir) {
-  // Create main.py
+  // Create directory structure following FastAPI best practices
+  const routersDir = join(backendDir, 'routers');
+  const modelsDir = join(backendDir, 'models');
+  const schemasDir = join(backendDir, 'schemas');
+  
+  fs.mkdirSync(routersDir, { recursive: true });
+  fs.mkdirSync(modelsDir, { recursive: true });
+  fs.mkdirSync(schemasDir, { recursive: true });
+  
+  // Create main.py following FastAPI structure guidelines
   const mainPy = `from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from routers import health, api
 
-app = FastAPI()
+app = FastAPI(
+    title="API",
+    description="FastAPI application",
+    version="1.0.0"
+)
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure appropriately for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include routers
+app.include_router(health.router, tags=["health"])
+app.include_router(api.router, prefix="/api", tags=["api"])
 
 @app.get("/")
 async def root():
     return {"message": "Hello World"}
-
-@app.get("/api/hello")
-async def hello():
-    return {"message": "Hello World from FastAPI"}
 `;
   fs.writeFileSync(join(backendDir, 'main.py'), mainPy);
 
+  // Create routers/__init__.py
+  const routersInit = `# Routers package
+`;
+  fs.writeFileSync(join(routersDir, '__init__.py'), routersInit);
+
+  // Create routers/health.py (health check endpoint)
+  const healthRouter = `from fastapi import APIRouter
+
+router = APIRouter()
+
+@router.get("/health")
+async def health_check():
+    """Health check endpoint for readiness/liveness probes"""
+    return {"status": "healthy"}
+`;
+  fs.writeFileSync(join(routersDir, 'health.py'), healthRouter);
+
+  // Create routers/api.py (example API routes)
+  const apiRouter = `from fastapi import APIRouter
+
+router = APIRouter()
+
+@router.get("/hello")
+async def hello():
+    """Example API endpoint"""
+    return {"message": "Hello World from FastAPI"}
+`;
+  fs.writeFileSync(join(routersDir, 'api.py'), apiRouter);
+
+  // Create models/__init__.py
+  const modelsInit = `# Models package
+`;
+  fs.writeFileSync(join(modelsDir, '__init__.py'), modelsInit);
+
+  // Create schemas/__init__.py
+  const schemasInit = `# Schemas package for Pydantic models
+`;
+  fs.writeFileSync(join(schemasDir, '__init__.py'), schemasInit);
+
   // Create requirements.txt
   const requirementsTxt = `fastapi==0.104.1
-uvicorn==0.24.0
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
 `;
   fs.writeFileSync(join(backendDir, 'requirements.txt'), requirementsTxt);
 
@@ -389,10 +462,17 @@ uvicorn==0.24.0
 env/
 venv/
 .venv
+*.egg-info/
+dist/
+build/
+.pytest_cache/
 `;
   fs.writeFileSync(join(backendDir, '.gitignore'), gitignore);
 
   console.log(`  ✅ Created ${backendDir}/main.py`);
+  console.log(`  ✅ Created ${backendDir}/routers/ directory structure`);
+  console.log(`  ✅ Created ${backendDir}/models/ directory structure`);
+  console.log(`  ✅ Created ${backendDir}/schemas/ directory structure`);
   console.log(`  ✅ Created ${backendDir}/requirements.txt`);
 }
 
