@@ -60,16 +60,20 @@ prompt_choice() {
     local options=("$@")
     local response
     
-    echo "$prompt"
+    # Output prompt and options directly to /dev/tty so they display immediately
+    # even when called via command substitution
+    printf "%s\n" "$prompt" > /dev/tty
     for i in "${!options[@]}"; do
         local marker=""
         if [ "${options[$i]}" = "$default" ]; then
             marker=" (default)"
         fi
-        echo "  $((i+1)). ${options[$i]}${marker}"
+        printf "  %d. %s%s\n" $((i+1)) "${options[$i]}" "$marker" > /dev/tty
     done
     
-    read -p "Enter choice [1-${#options[@]}]: " response < /dev/tty
+    # Print prompt to /dev/tty, then read from /dev/tty
+    printf "Enter choice [1-${#options[@]}]: " > /dev/tty
+    read response < /dev/tty
     
     if [ -z "$response" ]; then
         echo "$default"

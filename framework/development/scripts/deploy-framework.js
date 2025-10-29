@@ -14,6 +14,8 @@ import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const projectRoot = join(__dirname, '..');
+const deploymentDir = join(projectRoot, 'deployment'); // Directory containing wrangler.toml
+const frameworkRoot = join(projectRoot, '..', '..'); // Root of the rules-framework project
 
 // Configuration
 const config = {
@@ -24,6 +26,29 @@ const config = {
     'wrangler.template.toml',
     'package.template.json',
     'env.example'
+  ],
+  // Files needed by setup.sh that should be served from /files/
+  setupFiles: [
+    {
+      name: 'setup.sh',
+      path: join(frameworkRoot, 'setup.sh'),
+      r2Key: 'setup.sh'
+    },
+    {
+      name: 'mcp-server.js',
+      path: join(frameworkRoot, 'framework', 'external', 'mcp-server.js'),
+      r2Key: 'mcp-server.js'
+    },
+    {
+      name: 'setup-wizard.js',
+      path: join(frameworkRoot, 'framework', 'development', 'scripts', 'setup-wizard.js'),
+      r2Key: 'setup-wizard.js'
+    },
+    {
+      name: 'package.template.json',
+      path: join(frameworkRoot, 'framework', 'external', 'templates', 'nextjs-cloudflare', 'package.template.json'),
+      r2Key: 'package.template.json'
+    }
   ],
   rulesDirectories: [
     'core',
@@ -48,6 +73,10 @@ async function deployFramework() {
   try {
     // Check if wrangler is installed
     checkWranglerInstallation();
+
+    // Upload setup files (needed by setup.sh)
+    console.log('📦 Uploading setup files...');
+    await uploadSetupFiles();
 
     // Upload deployment files
     console.log('📦 Uploading deployment files...');
@@ -94,6 +123,21 @@ function checkWranglerInstallation() {
     console.error('   or');
     console.error('   npm install wrangler --save-dev');
     process.exit(1);
+  }
+}
+
+/**
+ * Upload setup files to R2
+ * These files are needed by setup.sh and served from /files/ endpoint
+ */
+async function uploadSetupFiles() {
+  for (const fileConfig of config.setupFiles) {
+    if (fileExists(fileConfig.path)) {
+      console.log(`   📄 Uploading ${fileConfig.name}...`);
+      await uploadToR2(fileConfig.r2Key, fileConfig.path);
+    } else {
+      console.log(`   ⚠️  File not found: ${fileConfig.path}`);
+    }
   }
 }
 
@@ -175,8 +219,8 @@ async function uploadToR2(r2Key, filePath) {
   try {
     const fileContent = readFileSync(filePath);
     
-    // Use wrangler to upload to R2
-    const command = `wrangler r2 object put ${config.r2Bucket}/${r2Key} --file "${filePath}"`;
+    // Use wrangler to upload to R2 (with --remote flag for production bucket)
+    const command = `wrangler r2 object put ${config.r2Bucket}/${r2Key} --file "${filePath}" --remote`;
     execSync(command, { stdio: 'pipe' });
     
     console.log(`     ✅ Uploaded ${r2Key}`);
@@ -214,7 +258,7 @@ async function deployWorker() {
     console.log('   🔧 Deploying worker...');
     execSync('wrangler deploy', { 
       stdio: 'inherit',
-      cwd: projectRoot 
+      cwd: deploymentDir 
     });
     console.log('   ✅ Worker deployed successfully');
   } catch (error) {

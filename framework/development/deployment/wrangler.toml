@@ -23,8 +23,7 @@ DEPLOYMENT_TYPE = "cloudflare-workers"
 # id = "2411d0f8-f1ac-4e81-8628-452cfbf7419a"
 # preview_id = "your-preview-kv-namespace-id"
 
-# R2 Bucket for file storage (will be created during deployment)
-# [[r2_buckets]]
-# binding = "RULES_STORAGE"
-# bucket_name = "rules-framework-files"
-# preview_bucket_name = "rules-framework-files-preview"
+# R2 Bucket for file storage
+[[r2_buckets]]
+binding = "RULES_STORAGE"
+bucket_name = "rules-framework-files"

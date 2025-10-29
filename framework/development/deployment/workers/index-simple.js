@@ -99,34 +99,52 @@ async function handleAPI(path, request, env) {
 async function handleFilesList(env) {
   const files = [
     {
-      name: 'deploy-template.js',
-      description: 'Universal deployment script for Next.js projects',
-      type: 'deployment',
-      status: 'available'
+      name: 'setup.sh',
+      path: '/files/setup.sh',
+      description: 'Interactive setup script for Rules Framework',
+      type: 'setup'
     },
     {
-      name: 'next.config.template.js',
-      description: 'Next.js configuration template',
-      type: 'deployment',
-      status: 'available'
+      name: 'mcp-server.js',
+      path: '/files/mcp-server.js',
+      description: 'MCP server for Rules Framework integration',
+      type: 'setup'
     },
     {
-      name: 'wrangler.template.toml',
-      description: 'Cloudflare configuration template',
-      type: 'deployment',
-      status: 'available'
+      name: 'setup-wizard.js',
+      path: '/files/setup-wizard.js',
+      description: 'Node.js setup wizard for project configuration',
+      type: 'setup'
     },
     {
       name: 'package.template.json',
+      path: '/files/package.template.json',
       description: 'Package configuration template',
-      type: 'deployment',
-      status: 'available'
+      type: 'setup'
+    },
+    {
+      name: 'deploy-template.js',
+      path: '/files/deploy-template.js',
+      description: 'Universal deployment script for Next.js projects',
+      type: 'deployment'
+    },
+    {
+      name: 'next.config.template.js',
+      path: '/files/next.config.template.js',
+      description: 'Next.js configuration template',
+      type: 'deployment'
+    },
+    {
+      name: 'wrangler.template.toml',
+      path: '/files/wrangler.template.toml',
+      description: 'Cloudflare configuration template',
+      type: 'deployment'
     },
     {
       name: 'env.example',
+      path: '/files/env.example',
       description: 'Environment variables template',
-      type: 'deployment',
-      status: 'available'
+      type: 'deployment'
     }
   ];
 
@@ -228,7 +246,7 @@ async function handleDocsList(env) {
  */
 async function handleSetupScript(env) {
   try {
-    const setupScript = "#!/bin/bash\n# Rules Framework Interactive Setup Script\nset -e\n\nFRAMEWORK_URL=\"https://rules-framework.mikehenken.workers.dev\"\n\n# Color codes for better UX\nRED='\\033[0;31m'\nGREEN='\\033[0;32m'\nYELLOW='\\033[1;33m'\nBLUE='\\033[0;34m'\nCYAN='\\033[0;36m'\nNC='\\033[0m' # No Color\n\n# Helper function to prompt for yes/no with default\nprompt_yes_no() {\n    local prompt=\"$1\"\n    local default=\"$2\"\n    local response\n    \n    if [ \"$default\" = \"yes\" ]; then\n        prompt=\"${prompt} [Y/n]: \"\n    else\n        prompt=\"${prompt} [y/N]: \"\n    fi\n    \n    read -p \"$prompt\" response\n    response=${response:-$default}\n    \n    case \"$response\" in\n        [Yy]|[Yy][Ee][Ss]|yes)\n            echo \"yes\"\n            ;;\n        *)\n            echo \"no\"\n            ;;\n    esac\n}\n\n# Helper function to prompt for input with default\nprompt_input() {\n    local prompt=\"$1\"\n    local default=\"$2\"\n    local response\n    \n    if [ -n \"$default\" ]; then\n        read -p \"${prompt} [${default}]: \" response < /dev/tty\n        echo \"${response:-$default}\"\n    else\n        read -p \"${prompt}: \" response < /dev/tty\n        echo \"$response\"\n    fi\n}\n\n# Helper function to prompt for choice\nprompt_choice() {\n    local prompt=\"$1\"\n    local default=\"$2\"\n    shift 2\n    local options=(\"$@\")\n    local response\n    \n    echo \"$prompt\"\n    for i in \"${!options[@]}\"; do\n        local marker=\"\"\n        if [ \"${options[$i]}\" = \"$default\" ]; then\n            marker=\" (default)\"\n        fi\n        echo \"  $((i+1)). ${options[$i]}${marker}\"\n    done\n    \n    read -p \"Enter choice [1-${#options[@]}]: \" response\n    \n    if [ -z \"$response\" ]; then\n        echo \"$default\"\n    else\n        local index=$((response - 1))\n        if [ \"$index\" -ge 0 ] && [ \"$index\" -lt \"${#options[@]}\" ]; then\n            echo \"${options[$index]}\"\n        else\n            echo \"$default\"\n        fi\n    fi\n}\n\necho -e \"${CYAN}\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557${NC}\"\necho -e \"${CYAN}\u2551        \ud83c\udfaf Rules Framework Interactive Setup Wizard         \u2551${NC}\"\necho -e \"${CYAN}\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557${NC}\"\necho \"\"\n\n# Get current directory name for default project name\nCURRENT_DIR=$(basename \"$PWD\")\n\n# ============================================================================\n# PART 1: INTERACTIVE QUESTIONNAIRE\n# ============================================================================\n\necho -e \"${BLUE}\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501${NC}\"\necho -e \"${BLUE}  Core Modules & Rules Configuration${NC}\"\necho -e \"${BLUE}\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501${NC}\"\necho \"\"\n\n# Question 1: Next.js frontend\nENABLE_NEXTJS=$(prompt_yes_no \"Enable Next.js frontend?\" \"yes\")\n\n# Question 2: FastAPI backend\nENABLE_FASTAPI=$(prompt_yes_no \"Enable FastAPI Python backend?\" \"yes\")\n\n# Question 3: Auto GitHub repo creation\nENABLE_GITHUB=$(prompt_yes_no \"Enable auto GitHub repo creation?\" \"yes\")\n\n# Question 4: Cloudflare deployment\nENABLE_CLOUDFLARE=$(prompt_yes_no \"Enable Cloudflare deployment?\" \"yes\")\n\n# Question 5: Rule granularity\nENABLE_GRANULAR_RULES=$(prompt_yes_no \"Configure individual rule granularity?\" \"no\")\n\necho \"\"\n\n# ============================================================================\n# CONDITIONAL: GitHub Configuration\n# ============================================================================\n\nif [ \"$ENABLE_GITHUB\" = \"yes\" ]; then\n    echo -e \"${BLUE}\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501${NC}\"\n    echo -e \"${BLUE}  GitHub Repository Configuration${NC}\"\n    echo -e \"${BLUE}\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501${NC}\"\n    echo \"\"\n    \n    # Prompt for project name\n    REPO_NAME=$(prompt_input \"Project name\" \"$CURRENT_DIR\")\n    \n    # Prompt for repository visibility\n    REPO_VISIBILITY=$(prompt_choice \"Repository visibility:\" \"private\" \"private\" \"public\")\n    \n    echo \"\"\nfi\n\n# ============================================================================\n# CONDITIONAL: Cloudflare Configuration\n# ============================================================================\n\nif [ \"$ENABLE_CLOUDFLARE\" = \"yes\" ]; then\n    echo -e \"${BLUE}\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501${NC}\"\n    echo -e \"${BLUE}  Cloudflare Deployment Configuration${NC}\"\n    echo -e \"${BLUE}\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501${NC}\"\n    echo \"\"\n    \n    # Prompt for Cloudflare API token\n    echo -e \"${YELLOW}\u26a0\ufe0f  These values will be passed as environment variables${NC}\"\n    CLOUDFLARE_API_TOKEN=$(prompt_input \"Cloudflare API Token\" \"\")\n    \n    # Prompt for Cloudflare account ID\n    CLOUDFLARE_ACCOUNT_ID=$(prompt_input \"Cloudflare Account ID\" \"\")\n    \n    # Prompt for deployment target\n    CLOUDFLARE_TARGET=$(prompt_choice \"Deployment target:\" \"Cloudflare Workers\" \"Cloudflare Workers\" \"Cloudflare Pages\")\n    \n    echo \"\"\nfi\n\n# ============================================================================\n# PART 2: DOWNLOAD FILES & PREPARE ENVIRONMENT\n# ============================================================================\n\necho -e \"${GREEN}\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501${NC}\"\necho -e \"${GREEN}  Downloading Framework Files...${NC}\"\necho -e \"${GREEN}\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501${NC}\"\necho \"\"\n\n# Create .cursor directory\nmkdir -p .cursor\n\n# Download MCP server\necho \"\ud83d\udce5 Downloading MCP server...\"\ncurl -s \"${FRAMEWORK_URL}/files/mcp-server.js\" > mcp-server.js\n\n# Create MCP configuration\necho \"\u2699\ufe0f  Creating MCP configuration...\"\ncat > .cursor/mcp.json << EOF\n{\n  \"mcpServers\": {\n    \"rules-framework\": {\n      \"command\": \"node\",\n      \"args\": [\"mcp-server.js\"],\n      \"env\": {\n        \"RULES_FRAMEWORK_URL\": \"${FRAMEWORK_URL}\"\n      }\n    }\n  }\n}\nEOF\n\n# Download setup wizard\necho \"\ud83d\udce5 Downloading setup wizard...\"\ncurl -s \"${FRAMEWORK_URL}/files/setup-wizard.js\" > setup-wizard.js\n\n# Download package.json template\necho \"\ud83d\udce5 Downloading package.json...\"\ncurl -s \"${FRAMEWORK_URL}/files/package.template.json\" > package.json\n\n# Install dependencies\necho \"\ud83d\udce6 Installing dependencies...\"\nnpm install --silent\n\necho \"\"\n\n# ============================================================================\n# PART 3: BUILD COMMAND-LINE ARGUMENTS & ENVIRONMENT VARIABLES\n# ============================================================================\n\necho -e \"${GREEN}\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501${NC}\"\necho -e \"${GREEN}  Starting Interactive Setup Wizard...${NC}\"\necho -e \"${GREEN}\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501${NC}\"\necho \"\"\n\n# Build command-line arguments\nWIZARD_ARGS=()\n\nif [ \"$ENABLE_NEXTJS\" = \"yes\" ]; then\n    WIZARD_ARGS+=(--nextjs)\nfi\n\nif [ \"$ENABLE_FASTAPI\" = \"yes\" ]; then\n    WIZARD_ARGS+=(--fastapi)\nfi\n\nif [ \"$ENABLE_GITHUB\" = \"yes\" ]; then\n    WIZARD_ARGS+=(--github)\n    WIZARD_ARGS+=(--repoName \"$REPO_NAME\")\n    WIZARD_ARGS+=(--repoVisibility \"$REPO_VISIBILITY\")\nfi\n\nif [ \"$ENABLE_CLOUDFLARE\" = \"yes\" ]; then\n    WIZARD_ARGS+=(--cloudflare)\n    WIZARD_ARGS+=(--cloudflareTarget \"$CLOUDFLARE_TARGET\")\n    \n    # Export environment variables for secrets\n    export CLOUDFLARE_API_TOKEN\n    export CLOUDFLARE_ACCOUNT_ID\nfi\n\nif [ \"$ENABLE_GRANULAR_RULES\" = \"yes\" ]; then\n    WIZARD_ARGS+=(--granular-rules)\nfi\n\n# Execute the Node.js wizard with all arguments\nnode setup-wizard.js \"${WIZARD_ARGS[@]}\"\n\necho \"\"\necho -e \"${GREEN}\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557${NC}\"\necho -e \"${GREEN}\u2551              \ud83c\udf89 Setup Complete! \ud83c\udf89                         \u2551${NC}\"\necho -e \"${GREEN}\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d${NC}\"\necho \"\"\n\n# Display configuration summary\necho -e \"${CYAN}Configuration Summary:${NC}\"\necho -e \"  Next.js Frontend: ${ENABLE_NEXTJS}\"\necho -e \"  FastAPI Backend: ${ENABLE_FASTAPI}\"\necho -e \"  GitHub Integration: ${ENABLE_GITHUB}\"\nif [ \"$ENABLE_GITHUB\" = \"yes\" ]; then\n    echo -e \"    - Repository Name: ${REPO_NAME}\"\n    echo -e \"    - Visibility: ${REPO_VISIBILITY}\"\nfi\necho -e \"  Cloudflare Deployment: ${ENABLE_CLOUDFLARE}\"\nif [ \"$ENABLE_CLOUDFLARE\" = \"yes\" ]; then\n    echo -e \"    - Target: ${CLOUDFLARE_TARGET}\"\nfi\necho -e \"  Granular Rules: ${ENABLE_GRANULAR_RULES}\"\necho \"\"\n\n";
+    const setupScript = "#!/bin/bash\n# Rules Framework Interactive Setup Script\nset -e\n\nFRAMEWORK_URL=\"https://rules-framework.mikehenken.workers.dev\"\n\n# Color codes for better UX\nRED='\\033[0;31m'\nGREEN='\\033[0;32m'\nYELLOW='\\033[1;33m'\nBLUE='\\033[0;34m'\nCYAN='\\033[0;36m'\nNC='\\033[0m' # No Color\n\n# Helper function to prompt for yes/no with default\nprompt_yes_no() {\n    local prompt=\"$1\"\n    local default=\"$2\"\n    local response\n    \n    if [ \"$default\" = \"yes\" ]; then\n        prompt=\"${prompt} [Y/n]: \"\n    else\n        prompt=\"${prompt} [y/N]: \"\n    fi\n    \n    read -p \"$prompt\" response < /dev/tty\n    response=${response:-$default}\n    \n    case \"$response\" in\n        [Yy]|[Yy][Ee][Ss]|yes)\n            echo \"yes\"\n            ;;\n        *)\n            echo \"no\"\n            ;;\n    esac\n}\n\n# Helper function to prompt for input with default\nprompt_input() {\n    local prompt=\"$1\"\n    local default=\"$2\"\n    local response\n    \n    if [ -n \"$default\" ]; then\n        read -p \"${prompt} [${default}]: \" response < /dev/tty\n        echo \"${response:-$default}\"\n    else\n        read -p \"${prompt}: \" response < /dev/tty\n        echo \"$response\"\n    fi\n}\n\n# Helper function to prompt for choice\nprompt_choice() {\n    local prompt=\"$1\"\n    local default=\"$2\"\n    shift 2\n    local options=(\"$@\")\n    local response\n    \n    # Output prompt and options to stderr so they display immediately\n    # and aren't captured by command substitution\n    echo \"$prompt\" >&2\n    for i in \"${!options[@]}\"; do\n        local marker=\"\"\n        if [ \"${options[$i]}\" = \"$default\" ]; then\n            marker=\" (default)\"\n        fi\n        echo \"  $((i+1)). ${options[$i]}${marker}\" >&2\n    done\n    \n    # Print prompt to stderr, then read from /dev/tty\n    printf \"Enter choice [1-${#options[@]}]: \" >&2\n    read response < /dev/tty\n    \n    if [ -z \"$response\" ]; then\n        echo \"$default\"\n    else\n        local index=$((response - 1))\n        if [ \"$index\" -ge 0 ] && [ \"$index\" -lt \"${#options[@]}\" ]; then\n            echo \"${options[$index]}\"\n        else\n            echo \"$default\"\n        fi\n    fi\n}\n\necho -e \"${CYAN}\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557${NC}\"\necho -e \"${CYAN}\u2551        \ud83c\udfaf Rules Framework Interactive Setup Wizard         \u2551${NC}\"\necho -e \"${CYAN}\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557${NC}\"\necho \"\"\n\n# Get current directory name for default project name\nCURRENT_DIR=$(basename \"$PWD\")\n\n# ============================================================================\n# PART 1: INTERACTIVE QUESTIONNAIRE\n# ============================================================================\n\necho -e \"${BLUE}\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501${NC}\"\necho -e \"${BLUE}  Core Modules & Rules Configuration${NC}\"\necho -e \"${BLUE}\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501${NC}\"\necho \"\"\n\n# Question 1: Next.js frontend\nENABLE_NEXTJS=$(prompt_yes_no \"Enable Next.js frontend?\" \"yes\")\n\n# Question 2: FastAPI backend\nENABLE_FASTAPI=$(prompt_yes_no \"Enable FastAPI Python backend?\" \"yes\")\n\n# Question 3: Auto GitHub repo creation\nENABLE_GITHUB=$(prompt_yes_no \"Enable auto GitHub repo creation?\" \"yes\")\n\n# Question 4: Cloudflare deployment\nENABLE_CLOUDFLARE=$(prompt_yes_no \"Enable Cloudflare deployment?\" \"yes\")\n\n# Question 5: Rule granularity\nENABLE_GRANULAR_RULES=$(prompt_yes_no \"Configure individual rule granularity?\" \"no\")\n\necho \"\"\n\n# ============================================================================\n# CONDITIONAL: GitHub Configuration\n# ============================================================================\n\nif [ \"$ENABLE_GITHUB\" = \"yes\" ]; then\n    echo -e \"${BLUE}\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501${NC}\"\n    echo -e \"${BLUE}  GitHub Repository Configuration${NC}\"\n    echo -e \"${BLUE}\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501${NC}\"\n    echo \"\"\n    \n    # Prompt for project name\n    REPO_NAME=$(prompt_input \"Project name\" \"$CURRENT_DIR\")\n    \n    # Prompt for repository visibility\n    REPO_VISIBILITY=$(prompt_choice \"Repository visibility:\" \"private\" \"private\" \"public\")\n    \n    echo \"\"\nfi\n\n# ============================================================================\n# CONDITIONAL: Cloudflare Configuration\n# ============================================================================\n\nif [ \"$ENABLE_CLOUDFLARE\" = \"yes\" ]; then\n    echo -e \"${BLUE}\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501${NC}\"\n    echo -e \"${BLUE}  Cloudflare Deployment Configuration${NC}\"\n    echo -e \"${BLUE}\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501${NC}\"\n    echo \"\"\n    \n    # Prompt for Cloudflare API token\n    echo -e \"${YELLOW}\u26a0\ufe0f  These values will be passed as environment variables${NC}\"\n    CLOUDFLARE_API_TOKEN=$(prompt_input \"Cloudflare API Token\" \"\")\n    \n    # Prompt for Cloudflare account ID\n    CLOUDFLARE_ACCOUNT_ID=$(prompt_input \"Cloudflare Account ID\" \"\")\n    \n    # Prompt for deployment target\n    CLOUDFLARE_TARGET=$(prompt_choice \"Deployment target:\" \"Cloudflare Workers\" \"Cloudflare Workers\" \"Cloudflare Pages\")\n    \n    echo \"\"\nfi\n\n# ============================================================================\n# PART 2: DOWNLOAD FILES & PREPARE ENVIRONMENT\n# ============================================================================\n\necho -e \"${GREEN}\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501${NC}\"\necho -e \"${GREEN}  Downloading Framework Files...${NC}\"\necho -e \"${GREEN}\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501${NC}\"\necho \"\"\n\n# Create .cursor directory\nmkdir -p .cursor\n\n# Download MCP server\necho \"\ud83d\udce5 Downloading MCP server...\"\ncurl -s \"${FRAMEWORK_URL}/files/mcp-server.js\" > mcp-server.js\n\n# Create MCP configuration\necho \"\u2699\ufe0f  Creating MCP configuration...\"\ncat > .cursor/mcp.json << EOF\n{\n  \"mcpServers\": {\n    \"rules-framework\": {\n      \"command\": \"node\",\n      \"args\": [\"mcp-server.js\"],\n      \"env\": {\n        \"RULES_FRAMEWORK_URL\": \"${FRAMEWORK_URL}\"\n      }\n    }\n  }\n}\nEOF\n\n# Download setup wizard\necho \"\ud83d\udce5 Downloading setup wizard...\"\ncurl -s \"${FRAMEWORK_URL}/files/setup-wizard.js\" > setup-wizard.js\n\n# Download package.json template\necho \"\ud83d\udce5 Downloading package.json...\"\ncurl -s \"${FRAMEWORK_URL}/files/package.template.json\" > package.json\n\n# Install dependencies\necho \"\ud83d\udce6 Installing dependencies...\"\nnpm install --silent\n\necho \"\"\n\n# ============================================================================\n# PART 3: BUILD COMMAND-LINE ARGUMENTS & ENVIRONMENT VARIABLES\n# ============================================================================\n\necho -e \"${GREEN}\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501${NC}\"\necho -e \"${GREEN}  Starting Interactive Setup Wizard...${NC}\"\necho -e \"${GREEN}\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501${NC}\"\necho \"\"\n\n# Build command-line arguments\nWIZARD_ARGS=()\n\nif [ \"$ENABLE_NEXTJS\" = \"yes\" ]; then\n    WIZARD_ARGS+=(--nextjs)\nfi\n\nif [ \"$ENABLE_FASTAPI\" = \"yes\" ]; then\n    WIZARD_ARGS+=(--fastapi)\nfi\n\nif [ \"$ENABLE_GITHUB\" = \"yes\" ]; then\n    WIZARD_ARGS+=(--github)\n    WIZARD_ARGS+=(--repoName \"$REPO_NAME\")\n    WIZARD_ARGS+=(--repoVisibility \"$REPO_VISIBILITY\")\nfi\n\nif [ \"$ENABLE_CLOUDFLARE\" = \"yes\" ]; then\n    WIZARD_ARGS+=(--cloudflare)\n    WIZARD_ARGS+=(--cloudflareTarget \"$CLOUDFLARE_TARGET\")\n    \n    # Export environment variables for secrets\n    export CLOUDFLARE_API_TOKEN\n    export CLOUDFLARE_ACCOUNT_ID\nfi\n\nif [ \"$ENABLE_GRANULAR_RULES\" = \"yes\" ]; then\n    WIZARD_ARGS+=(--granular-rules)\nfi\n\n# Execute the Node.js wizard with all arguments\nnode setup-wizard.js \"${WIZARD_ARGS[@]}\"\n\necho \"\"\necho -e \"${GREEN}\u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557${NC}\"\necho -e \"${GREEN}\u2551              \ud83c\udf89 Setup Complete! \ud83c\udf89                         \u2551${NC}\"\necho -e \"${GREEN}\u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d${NC}\"\necho \"\"\n\n# Display configuration summary\necho -e \"${CYAN}Configuration Summary:${NC}\"\necho -e \"  Next.js Frontend: ${ENABLE_NEXTJS}\"\necho -e \"  FastAPI Backend: ${ENABLE_FASTAPI}\"\necho -e \"  GitHub Integration: ${ENABLE_GITHUB}\"\nif [ \"$ENABLE_GITHUB\" = \"yes\" ]; then\n    echo -e \"    - Repository Name: ${REPO_NAME}\"\n    echo -e \"    - Visibility: ${REPO_VISIBILITY}\"\nfi\necho -e \"  Cloudflare Deployment: ${ENABLE_CLOUDFLARE}\"\nif [ \"$ENABLE_CLOUDFLARE\" = \"yes\" ]; then\n    echo -e \"    - Target: ${CLOUDFLARE_TARGET}\"\nfi\necho -e \"  Granular Rules: ${ENABLE_GRANULAR_RULES}\"\necho \"\"\n\n";
     return new Response(setupScript, {
       headers: {
         'Content-Type': 'text/x-shellscript',
@@ -294,30 +312,31 @@ curl -s https://rules-framework.mikehenken.workers.dev/setup | bash
 async function handleFileDownload(path, env) {
   const fileName = path.replace('/files/', '');
   
-  // Special handling for setup.sh - serve via handleSetupScript
-  if (fileName === 'setup.sh') {
-    // Redirect to /setup endpoint
-    const url = new URL(path, 'https://rules-framework.mikehenken.workers.dev');
-    url.pathname = '/setup';
-    return Response.redirect(url.toString(), 302);
+  // Check if R2 storage is available
+  if (!env.RULES_STORAGE) {
+    return new Response('R2 storage not configured. Please enable R2 in Cloudflare Dashboard.', { 
+      status: 503,
+      headers: {
+        'Content-Type': 'text/plain',
+        'Access-Control-Allow-Origin': '*'
+      }
+    });
   }
   
+  // Get file from R2 storage
+  const file = await env.RULES_STORAGE.get(fileName);
   
-  // For now, return a placeholder response
-  // In a real implementation, you'd serve the actual files from R2 storage
-  const fileContent = getFileContent(fileName);
-  
-  if (!fileContent) {
+  if (!file) {
     return new Response('File not found', { status: 404 });
   }
 
-  return new Response(fileContent, {
-    headers: {
-      'Content-Type': getContentType(fileName),
-      'Access-Control-Allow-Origin': '*',
-      'Cache-Control': 'public, max-age=3600'
-    }
-  });
+  const headers = {
+    'Content-Type': getContentType(fileName),
+    'Access-Control-Allow-Origin': '*',
+    'Cache-Control': 'public, max-age=3600'
+  };
+
+  return new Response(file.body, { headers });
 }
 
 /**
@@ -549,64 +568,38 @@ prompt_input() {
 
 
 # Helper function to prompt for choice
-# Helper function to prompt for choice
-prompt_choice() {
 prompt_choice() {
     local prompt="$1"
-    local prompt="$1"
-    local default="$2"
     local default="$2"
     shift 2
-    shift 2
-    local options=("$@")
     local options=("$@")
     local response
-    local response
     
-    
-    echo "$prompt"
-    echo "$prompt"
-    for i in "\${!options[@]}"; do
+    # Output prompt and options to stderr so they display immediately
+    # and aren't captured by command substitution
+    echo "$prompt" >&2
     for i in "\${!options[@]}"; do
         local marker=""
-        local marker=""
-        if [ "\${options[$i]}" = "$default" ]; then
         if [ "\${options[$i]}" = "$default" ]; then
             marker=" (default)"
-            marker=" (default)"
         fi
-        fi
-        echo "  $((i+1)). \${options[$i]}\${marker}"
-        echo "  $((i+1)). \${options[$i]}\${marker}"
-    done
+        echo "  $((i+1)). \${options[$i]}\${marker}" >&2
     done
     
-    
-    read -p "Enter choice [1-\${#options[@]}]: " response
-    read -p "Enter choice [1-\${#options[@]}]: " response
-    
+    # Print prompt to stderr, then read from /dev/tty
+    printf "Enter choice [1-\${#options[@]}]: " >&2
+    read response < /dev/tty
     
     if [ -z "$response" ]; then
-    if [ -z "$response" ]; then
-        echo "$default"
         echo "$default"
     else
-    else
-        local index=$((response - 1))
         local index=$((response - 1))
         if [ "$index" -ge 0 ] && [ "$index" -lt "\${#options[@]}" ]; then
-        if [ "$index" -ge 0 ] && [ "$index" -lt "\${#options[@]}" ]; then
-            echo "\${options[$index]}"
             echo "\${options[$index]}"
         else
-        else
-            echo "$default"
             echo "$default"
         fi
-        fi
     fi
-    fi
-}
 }
 
 
@@ -1130,7 +1123,7 @@ function getContentType(fileName) {
     'md': 'text/markdown',
     'txt': 'text/plain',
     'mdc': 'text/markdown',
-    'sh': 'text/plain'
+    'sh': 'text/x-shellscript'
   };
 
   return types[ext] || 'text/plain';

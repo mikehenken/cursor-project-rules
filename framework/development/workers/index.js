@@ -166,6 +166,30 @@ async function handleRules(path, env) {
 async function handleFilesList(env) {
   const files = [
     {
+      name: 'setup.sh',
+      path: '/files/setup.sh',
+      description: 'Interactive setup script for Rules Framework',
+      type: 'setup'
+    },
+    {
+      name: 'mcp-server.js',
+      path: '/files/mcp-server.js',
+      description: 'MCP server for Rules Framework integration',
+      type: 'setup'
+    },
+    {
+      name: 'setup-wizard.js',
+      path: '/files/setup-wizard.js',
+      description: 'Node.js setup wizard for project configuration',
+      type: 'setup'
+    },
+    {
+      name: 'package.template.json',
+      path: '/files/package.template.json',
+      description: 'Package configuration template',
+      type: 'setup'
+    },
+    {
       name: 'deploy-template.js',
       path: '/files/deploy-template.js',
       description: 'Universal deployment script for Next.js projects',
@@ -181,12 +205,6 @@ async function handleFilesList(env) {
       name: 'wrangler.template.toml',
       path: '/files/wrangler.template.toml',
       description: 'Cloudflare configuration template',
-      type: 'deployment'
-    },
-    {
-      name: 'package.template.json',
-      path: '/files/package.template.json',
-      description: 'Package configuration template',
       type: 'deployment'
     },
     {
@@ -437,7 +455,8 @@ function getContentType(fileName) {
     'toml': 'text/plain',
     'md': 'text/markdown',
     'txt': 'text/plain',
-    'mdc': 'text/markdown'
+    'mdc': 'text/markdown',
+    'sh': 'text/x-shellscript'
   };
 
   return types[ext] || 'text/plain';

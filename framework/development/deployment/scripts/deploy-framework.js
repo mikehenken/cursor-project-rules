@@ -13,7 +13,11 @@ import { dirname } from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const projectRoot = join(__dirname, '..');
+const scriptDir = __dirname; // framework/development/deployment/scripts
+const deploymentDir = join(scriptDir, '..'); // framework/development/deployment
+const repoRoot = join(scriptDir, '..', '..', '..', '..'); // repo root
+const docsDir = join(scriptDir, '..', '..', 'docs'); // framework/development/docs
+const deploymentFilesDir = join(docsDir, 'features', 'deployment'); // framework/development/docs/features/deployment
 
 // Configuration
 const config = {
@@ -23,9 +27,9 @@ const config = {
     'next.config.template.js', 
     'wrangler.template.toml',
     'package.template.json',
-    'env.example'
-  ,
-    'setup.sh'],
+    'env.example',
+    'setup.sh'
+  ],
   rulesDirectories: [
     'core',
     'backend', 
@@ -34,9 +38,9 @@ const config = {
     'ci-cd'
   ],
   docsDirectories: [
-    'docs/features/deployment',
-    'docs/guides',
-    'docs/setup'
+    'features/deployment',
+    'guides',
+    'setup'
   ]
 };
 
@@ -104,14 +108,14 @@ function checkWranglerInstallation() {
 async function uploadDeploymentFiles() {
   for (const fileName of config.deploymentFiles) {
     const filePath = fileName === 'setup.sh' 
-        ? join(projectRoot, '..', '..', '..', fileName)
-        : join(projectRoot, fileName);
+        ? join(repoRoot, fileName)
+        : join(deploymentFilesDir, fileName);
     
     if (fileExists(filePath)) {
       console.log(`   📄 Uploading ${fileName}...`);
       await uploadToR2(fileName, filePath);
     } else {
-      console.log(`   ⚠️  File not found: ${fileName}`);
+      console.log(`   ⚠️  File not found: ${fileName} (checked: ${filePath})`);
     }
   }
 }
@@ -121,7 +125,7 @@ async function uploadDeploymentFiles() {
  */
 async function uploadRulesFiles() {
   for (const dirName of config.rulesDirectories) {
-    const rulesDir = join(projectRoot, '.cursor', 'rules', dirName);
+    const rulesDir = join(repoRoot, '.cursor', 'rules', dirName);
     
     if (dirExists(rulesDir)) {
       console.log(`   📁 Uploading rules from ${dirName}/...`);
@@ -145,11 +149,11 @@ async function uploadRulesFiles() {
  * Upload documentation to R2
  */
 async function uploadDocumentation() {
-  for (const docsDir of config.docsDirectories) {
-    const fullDocsDir = join(projectRoot, docsDir);
+  for (const docsSubDir of config.docsDirectories) {
+    const fullDocsDir = join(docsDir, docsSubDir);
     
     if (dirExists(fullDocsDir)) {
-      console.log(`   📁 Uploading docs from ${docsDir}...`);
+      console.log(`   📁 Uploading docs from ${docsSubDir}...`);
       await uploadDirectoryToR2(fullDocsDir, 'docs');
     } else {
       console.log(`   ⚠️  Docs directory not found: ${fullDocsDir}`);
@@ -163,7 +167,7 @@ async function uploadDocumentation() {
   ];
 
   for (const docFile of mainDocs) {
-    const filePath = join(projectRoot, docFile);
+    const filePath = join(repoRoot, docFile);
     if (fileExists(filePath)) {
       console.log(`   📄 Uploading ${docFile}...`);
       await uploadToR2(`docs/${docFile}`, filePath);
@@ -201,7 +205,7 @@ async function uploadDirectoryToR2(dirPath, r2Prefix) {
     if (stat.isDirectory()) {
       await uploadDirectoryToR2(filePath, `${r2Prefix}/${fileName}`);
     } else {
-      const relativePath = relative(projectRoot, filePath);
+      const relativePath = relative(repoRoot, filePath);
       const r2Key = `${r2Prefix}/${relativePath}`;
       console.log(`     📄 Uploading ${fileName}...`);
       await uploadToR2(r2Key, filePath);
@@ -217,7 +221,7 @@ async function deployWorker() {
     console.log('   🔧 Deploying worker...');
     execSync('wrangler deploy', { 
       stdio: 'inherit',
-      cwd: projectRoot 
+      cwd: deploymentDir 
     });
     console.log('   ✅ Worker deployed successfully');
   } catch (error) {
