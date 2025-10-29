@@ -136,20 +136,23 @@ async function setupNextJS() {
     return;
   }
 
-  // Check for conflicting files
+  // Check for conflicting files (exclude framework files and hidden files)
+  const frameworkFilesToMove = ['.cursor', 'mcp-server.js', 'setup-wizard.js', 'setup.sh', 'package.json'];
   const conflictingFiles = files.filter(file => 
-    !['.cursor', 'mcp-server.js', 'setup-wizard.js', 'package.json', 'package-lock.json', 'node_modules', '.git'].includes(file) &&
+    !frameworkFilesToMove.includes(file) &&
+    !['package-lock.json', 'node_modules', '.git'].includes(file) &&
     !file.startsWith('.')
   );
 
   let tempDir = null;
-  if (conflictingFiles.length > 0) {
-    console.log('⚠️  Directory has files, temporarily moving framework files...');
+  
+  // Always move framework files if they exist, even if no other conflicts
+  if (frameworkFilesToMove.some(file => fs.existsSync(file))) {
+    console.log('⚠️  Temporarily moving framework files before Next.js setup...');
     tempDir = `.framework-temp-${Date.now()}`;
     fs.mkdirSync(tempDir);
     
-    const frameworkFiles = ['.cursor', 'mcp-server.js', 'setup-wizard.js'];
-    frameworkFiles.forEach(file => {
+    frameworkFilesToMove.forEach(file => {
       if (fs.existsSync(file)) {
         if (file === '.cursor') {
           fs.cpSync(file, `${tempDir}/.cursor`, { recursive: true });
@@ -159,6 +162,13 @@ async function setupNextJS() {
         }
       }
     });
+  }
+  
+  // If there are other conflicting files, we need to handle them
+  if (conflictingFiles.length > 0) {
+    console.log(`⚠️  Warning: Found ${conflictingFiles.length} conflicting file(s): ${conflictingFiles.join(', ')}`);
+    console.log('   These files may interfere with Next.js setup.');
+    throw new Error(`Cannot proceed: Directory contains conflicting files. Please remove or rename: ${conflictingFiles.join(', ')}`);
   }
 
   try {
@@ -181,11 +191,11 @@ async function setupNextJS() {
       fs.writeFileSync(pagePath, helloWorldPage);
     }
 
-    // Restore framework files
+    // Restore framework files (package.json is handled separately)
     if (tempDir && fs.existsSync(tempDir)) {
       console.log('🔄 Restoring framework files...');
-      const frameworkFiles = ['.cursor', 'mcp-server.js'];
-      frameworkFiles.forEach(file => {
+      const frameworkFilesToRestore = ['.cursor', 'mcp-server.js', 'setup-wizard.js', 'setup.sh'];
+      frameworkFilesToRestore.forEach(file => {
         if (fs.existsSync(`${tempDir}/${file}`)) {
           if (file === '.cursor') {
             fs.cpSync(`${tempDir}/${file}`, '.cursor', { recursive: true });
@@ -194,6 +204,10 @@ async function setupNextJS() {
           }
         }
       });
+      
+      // Note: package.json is kept from Next.js setup, we don't restore the original
+      // as Next.js creates its own with all necessary dependencies
+      
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
 
@@ -211,10 +225,10 @@ async function setupNextJS() {
       }
     }
   } catch (error) {
-    // Restore framework files on error
+    // Restore framework files on error (including package.json)
     if (tempDir && fs.existsSync(tempDir)) {
-      const frameworkFiles = ['.cursor', 'mcp-server.js'];
-      frameworkFiles.forEach(file => {
+      const frameworkFilesToRestore = ['.cursor', 'mcp-server.js', 'setup-wizard.js', 'setup.sh', 'package.json'];
+      frameworkFilesToRestore.forEach(file => {
         if (fs.existsSync(`${tempDir}/${file}`)) {
           if (file === '.cursor') {
             fs.cpSync(`${tempDir}/${file}`, '.cursor', { recursive: true });
