@@ -14,7 +14,7 @@ route = "staging-rules-framework.your-domain.com/*"
 
 # Environment variables
 [vars]
-FRAMEWORK_VERSION = "1.0.0"
+FRAMEWORK_VERSION = "1.3.4"
 DEPLOYMENT_TYPE = "cloudflare-workers"
 
 # KV Namespace for caching (commented out for initial deployment)

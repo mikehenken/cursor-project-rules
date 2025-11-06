@@ -140,7 +140,10 @@ ENABLE_GITHUB=$(prompt_yes_no "Enable auto GitHub repo creation?" "yes")
 # Question 4: Cloudflare deployment
 ENABLE_CLOUDFLARE=$(prompt_yes_no "Enable Cloudflare deployment?" "yes")
 
-# Question 5: Rule granularity
+# Question 5: MCP integration
+ENABLE_MCP=$(prompt_yes_no "Enable MCP (Model Context Protocol) integration?" "yes")
+
+# Question 6: Rule granularity
 ENABLE_GRANULAR_RULES=$(prompt_yes_no "Configure individual rule granularity?" "no")
 
 echo ""
@@ -199,18 +202,20 @@ echo ""
 # Create .cursor directory
 mkdir -p .cursor
 
-# Download MCP server
-echo "📥 Downloading MCP server..."
-curl -s "${FRAMEWORK_URL}/files/mcp-server.js" > mcp-server.js
+# Download MCP server and create config only if MCP is enabled
+if [ "$ENABLE_MCP" = "yes" ]; then
+    # Download MCP server
+    echo "📥 Downloading MCP server..."
+    curl -s "${FRAMEWORK_URL}/files/mcp-server.js" > mcp-server.js
 
-# Get absolute path to project directory
-PROJECT_DIR=$(pwd)
-MCP_SERVER_PATH="${PROJECT_DIR}/mcp-server.js"
+    # Get absolute path to project directory
+    PROJECT_DIR=$(pwd)
+    MCP_SERVER_PATH="${PROJECT_DIR}/mcp-server.js"
 
-# Create MCP configuration in project directory
-echo "⚙️  Creating MCP configuration..."
-mkdir -p .cursor
-cat > .cursor/mcp.json << EOF
+    # Create MCP configuration in project directory
+    echo "⚙️  Creating MCP configuration..."
+    mkdir -p .cursor
+    cat > .cursor/mcp.json << EOF
 {
   "mcpServers": {
     "rules-framework": {
@@ -219,16 +224,22 @@ cat > .cursor/mcp.json << EOF
       "env": {
         "RULES_FRAMEWORK_URL": "${FRAMEWORK_URL}"
       }
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "@playwright/mcp@latest"
+      ]
     }
   }
 }
 EOF
 
-# Also update MCP configuration in user's home directory
-# Cursor reads from ~/.cursor/mcp.json, not the project directory
-echo "⚙️  Updating MCP configuration in home directory..."
-mkdir -p "${HOME}/.cursor"
-cat > "${HOME}/.cursor/mcp.json" << EOF
+    # Also update MCP configuration in user's home directory
+    # Cursor reads from ~/.cursor/mcp.json, not the project directory
+    echo "⚙️  Updating MCP configuration in home directory..."
+    mkdir -p "${HOME}/.cursor"
+    cat > "${HOME}/.cursor/mcp.json" << EOF
 {
   "mcpServers": {
     "rules-framework": {
@@ -237,23 +248,36 @@ cat > "${HOME}/.cursor/mcp.json" << EOF
       "env": {
         "RULES_FRAMEWORK_URL": "${FRAMEWORK_URL}"
       }
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "@playwright/mcp@latest"
+      ]
     }
   }
 }
 EOF
-echo "  ✅ MCP configuration updated at ${HOME}/.cursor/mcp.json"
+    echo "  ✅ MCP configuration updated at ${HOME}/.cursor/mcp.json"
+fi
 
 # Download setup wizard
 echo "📥 Downloading setup wizard..."
 curl -s "${FRAMEWORK_URL}/files/setup-wizard.js" > setup-wizard.js
 
-# Download package.json template
-echo "📥 Downloading package.json..."
-curl -s "${FRAMEWORK_URL}/files/package.template.json" > package.json
-
-# Install dependencies
-echo "📦 Installing dependencies..."
-npm install --silent
+# Only download package.json template and install dependencies if needed
+# (Next.js or MCP will create their own package.json if needed)
+if [ "$ENABLE_NEXTJS" = "yes" ] || [ "$ENABLE_MCP" = "yes" ]; then
+    # Download package.json template (only if not Next.js - Next.js creates its own)
+    if [ "$ENABLE_NEXTJS" != "yes" ] && [ "$ENABLE_MCP" = "yes" ]; then
+        echo "📥 Downloading package.json..."
+        curl -s "${FRAMEWORK_URL}/files/package.template.json" > package.json
+        
+        # Install dependencies
+        echo "📦 Installing dependencies..."
+        npm install --no-audit --no-fund --prefer-offline 2>&1 | grep -v "npm WARN" || true
+    fi
+fi
 
 echo ""
 
@@ -292,6 +316,10 @@ if [ "$ENABLE_CLOUDFLARE" = "yes" ]; then
     export CLOUDFLARE_ACCOUNT_ID
 fi
 
+if [ "$ENABLE_MCP" = "yes" ]; then
+    WIZARD_ARGS+=(--mcp)
+fi
+
 if [ "$ENABLE_GRANULAR_RULES" = "yes" ]; then
     WIZARD_ARGS+=(--granular-rules)
 fi
@@ -318,6 +346,7 @@ echo -e "  Cloudflare Deployment: ${ENABLE_CLOUDFLARE}"
 if [ "$ENABLE_CLOUDFLARE" = "yes" ]; then
     echo -e "    - Target: ${CLOUDFLARE_TARGET}"
 fi
+echo -e "  MCP Integration: ${ENABLE_MCP}"
 echo -e "  Granular Rules: ${ENABLE_GRANULAR_RULES}"
 echo ""
 

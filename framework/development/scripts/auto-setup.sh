@@ -49,6 +49,12 @@ cat > .cursor/mcp.json << EOF
       "env": {
         "RULES_FRAMEWORK_URL": "${FRAMEWORK_URL}"
       }
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "@playwright/mcp@latest"
+      ]
     }
   }
 }
@@ -67,6 +73,12 @@ cat > "${HOME}/.cursor/mcp.json" << EOF
       "env": {
         "RULES_FRAMEWORK_URL": "${FRAMEWORK_URL}"
       }
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "@playwright/mcp@latest"
+      ]
     }
   }
 }

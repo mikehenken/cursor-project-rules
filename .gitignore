@@ -4,3 +4,21 @@ node_modules/
 **/node_modules/
 .wrangler/
 **/.wrangler/
+
+# Test artifacts
+test-output/
+test-scenarios/
+test-results/
+playwright-report/
+*.log
+**/*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.idea/
+*.swp
+*.swo
+*~
