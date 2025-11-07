@@ -1,6 +1,6 @@
 {
   "name": "rules-framework",
-  "version": "1.3.4",
+  "version": "1.3.6",
   "description": "Cursor Rules Framework - Deployable to Cloudflare Workers with MCP Integration",
   "main": "framework/development/workers/index.js",
   "type": "module",
