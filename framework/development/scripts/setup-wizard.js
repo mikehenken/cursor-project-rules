@@ -29,6 +29,7 @@ const config = {
   repoVisibility: getArgValue('--repoVisibility') || 'private',
   cloudflare: args.includes('--cloudflare'),
   cloudflareTarget: getArgValue('--cloudflareTarget') || 'Cloudflare Workers',
+  mcp: args.includes('--mcp'),
   granularRules: args.includes('--granular-rules'),
   cloudflareApiToken: process.env.CLOUDFLARE_API_TOKEN,
   cloudflareAccountId: process.env.CLOUDFLARE_ACCOUNT_ID
@@ -70,9 +71,9 @@ async function main() {
     // Always download and install rules
     await downloadAndInstallRules();
     
-    // Ensure MCP dependencies are installed in root (if Next.js wasn't set up)
+    // Ensure MCP dependencies are installed in root only if MCP is enabled
     // This ensures mcp-server.js works even without Next.js
-    if (!config.nextjs) {
+    if (config.mcp && !config.nextjs) {
       await ensureMCPDependencies();
     }
 
@@ -98,6 +99,9 @@ async function main() {
     if (config.cloudflare) {
       console.log(`  ✅ Cloudflare Deployment`);
       console.log(`     - Target: ${config.cloudflareTarget}`);
+    }
+    if (config.mcp) {
+      console.log('  ✅ MCP Integration');
     }
     if (config.granularRules) {
       console.log('  ✅ Granular Rules Configuration');
@@ -281,9 +285,19 @@ async function setupNextJS() {
     }
     
     console.log('📦 Installing Next.js with TypeScript and Tailwind in frontend/...');
+    console.log('   ⏱️  This may take 5-10 minutes...');
+    // Set npm config to avoid hanging on audit/fund prompts
+    const npmEnv = {
+      ...process.env,
+      npm_config_audit: 'false',
+      npm_config_fund: 'false',
+      npm_config_progress: 'false'
+    };
     execSync('npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias "@/*" --yes', { 
       stdio: 'inherit',
-      cwd: join(process.cwd(), frontendDir)
+      cwd: join(process.cwd(), frontendDir),
+      env: npmEnv,
+      timeout: 300000 // 5 minute timeout
     });
 
     // Update page.tsx with Hello World
@@ -322,61 +336,63 @@ async function setupNextJS() {
 
     console.log('✅ Next.js setup complete in frontend/!');
     
-    // Ensure root package.json has MCP dependencies (Next.js creates its own in frontend/)
+    // Ensure root package.json has MCP dependencies only if MCP is enabled
     // Root package.json needs @modelcontextprotocol/sdk for mcp-server.js
-    const rootPackageJsonPath = join(process.cwd(), 'package.json');
-    if (fs.existsSync(rootPackageJsonPath)) {
-      try {
-        const rootPackageJson = JSON.parse(fs.readFileSync(rootPackageJsonPath, 'utf8'));
-        if (!rootPackageJson.dependencies || !rootPackageJson.dependencies['@modelcontextprotocol/sdk']) {
-          console.log('📦 Ensuring MCP dependencies are installed in root...');
-          if (!rootPackageJson.dependencies) {
-            rootPackageJson.dependencies = {};
-          }
-          rootPackageJson.dependencies['@modelcontextprotocol/sdk'] = '^1.20.2';
-          if (!rootPackageJson.type) {
-            rootPackageJson.type = 'module';
-          }
-          fs.writeFileSync(rootPackageJsonPath, JSON.stringify(rootPackageJson, null, 2));
-          
-          // Install MCP dependencies
-          execSync('npm install @modelcontextprotocol/sdk@^1.20.2 --silent', { 
-            stdio: 'inherit',
-            cwd: process.cwd()
-          });
-          console.log('  ✅ MCP dependencies installed in root');
-        }
-      } catch (error) {
-        console.log(`  ⚠️  Could not update root package.json: ${error.message}`);
-        // Try to install anyway
+    if (config.mcp) {
+      const rootPackageJsonPath = join(process.cwd(), 'package.json');
+      if (fs.existsSync(rootPackageJsonPath)) {
         try {
-          execSync('npm install @modelcontextprotocol/sdk@^1.20.2 --silent', { 
-            stdio: 'inherit',
-            cwd: process.cwd()
-          });
-        } catch (installError) {
-          console.log(`  ⚠️  Could not install MCP dependencies: ${installError.message}`);
+          const rootPackageJson = JSON.parse(fs.readFileSync(rootPackageJsonPath, 'utf8'));
+          if (!rootPackageJson.dependencies || !rootPackageJson.dependencies['@modelcontextprotocol/sdk']) {
+            console.log('📦 Ensuring MCP dependencies are installed in root...');
+            if (!rootPackageJson.dependencies) {
+              rootPackageJson.dependencies = {};
+            }
+            rootPackageJson.dependencies['@modelcontextprotocol/sdk'] = '^1.20.2';
+            if (!rootPackageJson.type) {
+              rootPackageJson.type = 'module';
+            }
+            fs.writeFileSync(rootPackageJsonPath, JSON.stringify(rootPackageJson, null, 2));
+            
+            // Install MCP dependencies
+            execSync('npm install @modelcontextprotocol/sdk@^1.20.2 --no-audit --no-fund', { 
+              stdio: 'inherit',
+              cwd: process.cwd()
+            });
+            console.log('  ✅ MCP dependencies installed in root');
+          }
+        } catch (error) {
+          console.log(`  ⚠️  Could not update root package.json: ${error.message}`);
+          // Try to install anyway
+          try {
+            execSync('npm install @modelcontextprotocol/sdk@^1.20.2 --no-audit --no-fund', { 
+              stdio: 'inherit',
+              cwd: process.cwd()
+            });
+          } catch (installError) {
+            console.log(`  ⚠️  Could not install MCP dependencies: ${installError.message}`);
+          }
         }
+      } else {
+        // Create root package.json if it doesn't exist
+        console.log('📦 Creating root package.json with MCP dependencies...');
+        const rootPackageJson = {
+          name: 'rules-framework-project',
+          version: '1.0.0',
+          private: true,
+          description: 'Project with Rules Framework and MCP integration',
+          type: 'module',
+          dependencies: {
+            '@modelcontextprotocol/sdk': '^1.20.2'
+          }
+        };
+        fs.writeFileSync(rootPackageJsonPath, JSON.stringify(rootPackageJson, null, 2));
+        execSync('npm install --no-audit --no-fund', { 
+          stdio: 'inherit',
+          cwd: process.cwd()
+        });
+        console.log('  ✅ Root package.json created and dependencies installed');
       }
-    } else {
-      // Create root package.json if it doesn't exist
-      console.log('📦 Creating root package.json with MCP dependencies...');
-      const rootPackageJson = {
-        name: 'rules-framework-project',
-        version: '1.0.0',
-        private: true,
-        description: 'Project with Rules Framework and MCP integration',
-        type: 'module',
-        dependencies: {
-          '@modelcontextprotocol/sdk': '^1.20.2'
-        }
-      };
-      fs.writeFileSync(rootPackageJsonPath, JSON.stringify(rootPackageJson, null, 2));
-      execSync('npm install --silent', { 
-        stdio: 'inherit',
-        cwd: process.cwd()
-      });
-      console.log('  ✅ Root package.json created and dependencies installed');
     }
     
     // Add Cloudflare Workers dependencies if deploying to Cloudflare
@@ -637,6 +653,7 @@ DEPLOYMENT_TYPE=${config.cloudflareTarget.toLowerCase().replace('cloudflare ', '
 
 /**
  * Ensure MCP dependencies are installed in root package.json
+ * Only called when MCP is enabled and Next.js is not set up
  */
 async function ensureMCPDependencies() {
   const rootPackageJsonPath = join(process.cwd(), 'package.json');
@@ -656,7 +673,7 @@ async function ensureMCPDependencies() {
         fs.writeFileSync(rootPackageJsonPath, JSON.stringify(rootPackageJson, null, 2));
         
         // Install MCP dependencies
-        execSync('npm install @modelcontextprotocol/sdk@^1.20.2 --silent', { 
+        execSync('npm install @modelcontextprotocol/sdk@^1.20.2 --no-audit --no-fund', { 
           stdio: 'inherit',
           cwd: process.cwd()
         });
@@ -666,7 +683,7 @@ async function ensureMCPDependencies() {
       console.log(`  ⚠️  Could not update package.json: ${error.message}`);
       // Try to install anyway
       try {
-        execSync('npm install @modelcontextprotocol/sdk@^1.20.2 --silent', { 
+        execSync('npm install @modelcontextprotocol/sdk@^1.20.2 --no-audit --no-fund', { 
           stdio: 'inherit',
           cwd: process.cwd()
         });
@@ -675,7 +692,7 @@ async function ensureMCPDependencies() {
       }
     }
   } else {
-    // Create package.json if it doesn't exist
+    // Create package.json if it doesn't exist (only for MCP projects)
     console.log('📦 Creating package.json with MCP dependencies...');
     const rootPackageJson = {
       name: 'rules-framework-project',
@@ -688,7 +705,7 @@ async function ensureMCPDependencies() {
       }
     };
     fs.writeFileSync(rootPackageJsonPath, JSON.stringify(rootPackageJson, null, 2));
-    execSync('npm install --silent', { 
+    execSync('npm install --no-audit --no-fund', { 
       stdio: 'inherit',
       cwd: process.cwd()
     });
@@ -1223,8 +1240,7 @@ See [docs/setup/DEPLOYMENT.md](./docs/setup/DEPLOYMENT.md) for deployment instru
 This project uses the [Rules Framework](https://rules-framework.mikehenken.workers.dev) for Cursor IDE integration.
 
 - Rules are configured in \`.cursor/rules/\`
-- MCP server provides framework integration
-- Use \`@rules-framework\` commands in Cursor chat
+${config.mcp ? '- MCP server provides framework integration\n- Use `@rules-framework` commands in Cursor chat' : '- Rules are available for Cursor IDE integration'}
 
 ---
 
